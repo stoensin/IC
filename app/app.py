@@ -19,7 +19,7 @@ except ImportError:
     import queue
 
 define("port", default=1688, help="the port of app server")
-define("model_server", default="http://127.0.0.1:5000", help="the ImageCaptioning Server API")
+define("model_server", default="http://127.0.0.1:5000", help="the ImageCaptioning Server")
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"), format='[%(asctime)s] %(levelname)s: %(message)s', datefmt='%m/%d/%y %H:%M:%S')
 
@@ -33,11 +33,14 @@ app_cookie = 'app-imagecaption_' + str(uuid.uuid4())
 
 class BaseHandler(web.RequestHandler):
     def get_current_user(self):
-        return escape.to_basestring(self.get_secure_cookie(app_cookie))
+        return escape.to_basestring(
+            self.get_secure_cookie(app_cookie)
+            )
 
 
 class LoginHandler(BaseHandler):
-    """Sets the User ID cookie
+    """
+    set a cookie for user when start with app
     """
     def post(self):
         if not self.get_secure_cookie(app_cookie):
@@ -52,7 +55,7 @@ class MainHandler(BaseHandler):
     def get(self):
         result={}
         clean_up_old_images()
-        image_captions=get_image_captions(self.current_user)
+        image_captions = get_image_captions(self.current_user)
 
         result['cookie_key'] = app_cookie
         result['user'] = image_captions
@@ -62,6 +65,7 @@ class MainHandler(BaseHandler):
 
 class DetailHandler(BaseHandler):
     def get(self):
+        result={}
         user_image_captions = get_image_captions(self.current_user)
         image = self.get_argument('image', None)
         if not image:
@@ -70,7 +74,10 @@ class DetailHandler(BaseHandler):
         if image not in user_image_captions:
             self.set_status(404)
             return self.finish("404: Image not found")
-        predictions=user_image_captions[image]
+        predictions = user_image_captions[image]
+        result['predictions'] = predictions
+
+        return result
 
 
 class CleanupHandler(BaseHandler):
@@ -103,7 +110,7 @@ class UploadHandler(BaseHandler):
                 rel_path = static_img_path + file_name
                 with open(rel_path, 'wb') as output_file:
                     output_file.write(file_des['body'])
-                t = threading.Thread(target=run_ml_queued,
+                t = threading.Thread(target=get_predict_queued,
                                      args=(rel_path, ret_queue))
                 threads.append(t)
                 t.start()
@@ -144,8 +151,8 @@ def get_image_captions(user_id):
     )
 
 
-def run_ml_queued(img_path, ret_queue):
-    caption = run_ml(img_path)
+def get_predict_queued(img_path, ret_queue):
+    caption = get_predict(img_path)
     ret_queue.put((img_path, caption))
 
 
@@ -158,7 +165,7 @@ def valid_file_ext(filename):
     return valid
 
 
-def run_ml(img_path):
+def get_predict(img_path):
     """Runs ML on given image"""
     mime_type = mimetypes.guess_type(img_path)[0]
     with open(img_path, 'rb') as img_file:
@@ -233,7 +240,7 @@ def shutdown():
     ioloop.IOLoop.current().stop()
 
 
-def make_app():
+def init_app():
     handlers = [
         (r"/", MainHandler),
         (r"/upload", UploadHandler),
@@ -244,7 +251,7 @@ def make_app():
 
     configs = {
         'static_path': 'static',
-        'template_path': 'templates',
+        'template_path': '',
         "cookie_secret": os.urandom(32)
     }
 
@@ -269,8 +276,8 @@ def main():
             options.model_server)
         raise SystemExit
 
-    logging.info("Starting web server")
-    app = make_app()
+    logging.info("Starting Image captioning server")
+    app = init_app()
 
     global server
     server = httpserver.HTTPServer(app)
@@ -278,7 +285,7 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
 
 
-    logging.info("Use Ctrl+C to stop web server")
+    logging.info("Use Ctrl+C to stop Image captioning server")
     ioloop.IOLoop.current().start()
 
 

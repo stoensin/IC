@@ -19,7 +19,7 @@ VOCAB_FILE = './assets/word_counts.txt'
 class ModelWrapper(object):
     """Model wrapper for TensorFlow models in SavedModel format"""
     def __init__(self, path=DEFAULT_MODEL_PATH):
-        # TODO Replace this part with SavedModel
+
         g = tf.Graph()
         with g.as_default():
             model = inference_wrapper.InferenceWrapper()

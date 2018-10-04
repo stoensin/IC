@@ -23,7 +23,6 @@ predict_response = api.model('ModelPredictResponse', {
     'predictions': fields.List(fields.Nested(label_prediction), description='Predicted labels and probabilities')
 })
 
-# set up parser for image input data
 image_parser = api.parser()
 image_parser.add_argument('image', type=FileStorage, location='files', required=True)
 
@@ -47,7 +46,10 @@ class Predict(Resource):
         image_data = args['image'].read()
         preds = self.model_wrapper.predict(image_data)
 
-        label_preds = [{'index': p[0], 'caption': p[1], 'probability': p[2]} for p in [x for x in preds]]
+        label_preds = [{'index': p[0],
+                        'caption': p[1],
+                        'probability': p[2]} for p in [x for x in preds]]
+
         result['predictions'] = label_preds
         result['status'] = 'ok'
 
