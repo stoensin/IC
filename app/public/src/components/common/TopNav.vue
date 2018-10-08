@@ -51,4 +51,9 @@ export default {
     left: 20px;
     color: #f7f7f7
   }
+  @media screen and (min-width:760px){
+    #header-nav{
+      width: 600px;
+    }
+  }
 </style>

@@ -25,7 +25,7 @@ export default {
 
 <style>
   html,body{
-    background-color: #39434f;
+    background-color: #424a53;
   }
 
   ol, ul {
@@ -68,5 +68,14 @@ export default {
   }
   .mint-spinner-snake{
     margin: 0 auto;
+  }
+  @media screen and (min-width:760px){
+    #app {
+      width: 600px;
+      margin: 0 auto;
+    }
+    .app-view{
+      width: 600px;
+    }
   }
 </style>

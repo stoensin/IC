@@ -70,4 +70,9 @@ export default {
   #footer-nav ul li .active{
     color: #f7f7f7;
   }
+  @media screen and (min-width:760px){
+    #footer-nav{
+      width: 600px;
+    }
+  }
 </style>

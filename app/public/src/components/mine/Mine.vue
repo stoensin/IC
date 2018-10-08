@@ -37,7 +37,7 @@ export default {
 
         }
       },(err) => {
-        console.log('App login failed',err)
+        console.log('del failed',err)
       })
       Toast({
         message: '清除成功',
