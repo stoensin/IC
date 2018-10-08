@@ -3,6 +3,7 @@
     <h2>特色功能</h2>
     <p @click="switchTo(4)">收藏<span class='right'><icon name="icon-action-more" :scale="2"></icon></span></p>
     <p @click="clearLocalStorage()">清除缓存<span class="right">{{ localStorageSize }}</span></p>
+    <p @click="delall()">清空上传<span class="right"></span></p>
   </div>
 </template>
 
@@ -26,6 +27,18 @@ export default {
     clearLocalStorage(){
       localStorage.clear();
       this.localStorageSize = '0.00KB';
+      Toast({
+        message: '清除成功',
+      });
+    },
+    delall(){
+      this.$http.delete("api/cleanup").then((response) => {
+        if (response.data.data == true){
+
+        }
+      },(err) => {
+        console.log('App login failed',err)
+      })
       Toast({
         message: '清除成功',
       });
