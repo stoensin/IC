@@ -268,6 +268,7 @@ Route definition
 def init_app():
     handlers = [
         (r"/", MainHandler),
+        (r"/index", MainHandler),
         (r"/upload", UploadHandler),
         (r"/cleanup", CleanupHandler),
         (r"/detail", DetailHandler),

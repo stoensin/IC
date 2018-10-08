@@ -29,7 +29,7 @@ export default {
       if (!this.loading){
         this.loading = true;
         setTimeout(() => {
-          this.$http.get('api/').then((response) => {
+          this.$http.get('api/index').then((response) => {
             if (response.data.data == false){
               this.loaded = true;
               this.isLoadShow = false;
