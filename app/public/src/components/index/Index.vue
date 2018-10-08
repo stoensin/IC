@@ -86,6 +86,9 @@ export default {
     add(item){
       this.list.unshift(item)
     },
+    del(item){
+      
+    },
     rev(list){
       return list.reverse()
     }
