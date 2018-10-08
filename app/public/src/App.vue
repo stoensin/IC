@@ -77,5 +77,8 @@ export default {
     .app-view{
       width: 600px;
     }
+    .lg-preview-wrapper{
+        width: 600px!important;
+    }
   }
 </style>
