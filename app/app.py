@@ -20,7 +20,7 @@ except ImportError:
     import queue
 
 define("port", default=1688, help="the port of app server")
-define("model_server", default="http://127.0.0.1:5000", help="the ImageCaptioning Server")
+define("model_server", default="http://127.0.0.1:5200", help="the ImageCaption Model Server")
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"), format='[%(asctime)s] %(levelname)s: %(message)s', datefmt='%m/%d/%y %H:%M:%S')
 

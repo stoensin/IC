@@ -8,7 +8,6 @@ from im2txt import inference_wrapper
 from im2txt.inference_utils import vocabulary
 from im2txt.inference_utils import caption_generator
 
-from config import DEFAULT_MODEL_PATH
 
 logger = logging.getLogger()
 
@@ -18,7 +17,7 @@ VOCAB_FILE = './assets/word_counts.txt'
 
 class ModelWrapper(object):
     """Model wrapper for TensorFlow models in SavedModel format"""
-    def __init__(self, path=DEFAULT_MODEL_PATH):
+    def __init__(self):
 
         g = tf.Graph()
         with g.as_default():
