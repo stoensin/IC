@@ -1,7 +1,8 @@
 ### FOLDER: app
 
 
-> provide service for user of the image captioning
+> app.py provide service for user of the image captioning
+> public/ the app folder
 
 ### FOLDER: backendApi
 
