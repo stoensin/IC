@@ -3,6 +3,8 @@
 
 > Download the visual_genome dataset [visual_genome](http://visualgenome.org/)
 
+> you should download the images part 1 (9.2 GB), part 2 (5.47 GB) with extract to directory 'VG/images';Download image meta data (17.62 MB) with extract to directory 'VG/1.2' ;Download region descriptions (712.07 MB) with extract to directory  'VG/1.2'  
+
 > Data preparation : goto visual_genome folder for detail
 
 
