@@ -14,7 +14,7 @@ step=$5
 if [ -d '/content' ]; then
     DATASET='visual_genome_1.2'
     NET='res50'
-    ckpt_path="res101/res101.ckpt"
+    ckpt_path="res50/res50.ckpt"
     data_dir='/content/visual_genome'
 fi
 
@@ -83,7 +83,7 @@ NEW_WIGHTS=output/dc_tune_conv/${TRAIN_IMDB}
 if [ ${step} -lt '4' ]
 then
 time python ./op/train_net.py \
-    --weights ${NEW_WIGHTS} \
+    --weights ${ckpt_path} \
     --imdb ${TRAIN_IMDB} \
     --imdbval ${TEST_IMDB} \
     --iters ${FINETUNE_AFTER2} \
@@ -98,7 +98,7 @@ NEW_WIGHTS=output/dc_context/${TRAIN_IMDB}
 if [ ${step} -lt '5' ]
 then
 time python ./op/train_net.py \
-    --weights ${NEW_WIGHTS} \
+    --weights ${ckpt_path} \
     --imdb ${TRAIN_IMDB} \
     --imdbval ${TEST_IMDB} \
     --iters `expr ${ITERS2} - ${FINETUNE_AFTER2}` \

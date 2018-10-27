@@ -553,7 +553,7 @@ class Network(object):
             self._for_debug['anchors'] = anchors
 
     def _build_network(self, is_training=True):
-        # select initializers
+        # typeof initializers
         if cfg.TRAIN.WEIGHT_INITIALIZER == 'truncated':
             initializer = tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
             # initializer_bbox = tf.truncated_normal_initializer(mean=0.0, stddev=0.001)
@@ -565,6 +565,7 @@ class Network(object):
             # initializer_bbox = tf.contrib.layers.xavier_initializer()
 
         net_conv = self._image_to_head(is_training)
+
         with tf.variable_scope(self._scope + '/Extraction'):
             # build the anchors for the image
             self._anchor_component()
@@ -588,6 +589,7 @@ class Network(object):
                 raise NotImplementedError
 
         fc7 = self._head_to_tail(pool5, is_training)
+
         with tf.variable_scope(self._scope + '/Prediction'):
             # add context fusion
             if cfg.CONTEXT_FUSION:
@@ -747,7 +749,7 @@ class Network(object):
         return rois
 
     def _region_classification(self, fc7, is_training, initializer):
-        # predict two class: fg or bg
+        # predict two class: fg or bg :as each anchor as fg/bg/ignore.
         cls_score = slim.fully_connected(fc7, self._num_classes + 1,
                                          weights_initializer=initializer,
                                          trainable=is_training,
@@ -767,6 +769,7 @@ class Network(object):
         return cls_prob
 
     def _image_to_head(self, is_training, reuse=None):
+        print('NotImplementedError')
         raise NotImplementedError
 
     def _head_to_tail(self, pool5, is_training, reuse=None):
