@@ -8,9 +8,9 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
-from densecap.config import cfg
-from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
-from faster_rcnn.fast_rcnn.nms_wrapper import nms
+from im2txt.densecap.config import cfg
+from im2txt.faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
+from im2txt.faster_rcnn.fast_rcnn.nms_wrapper import nms
 
 
 def proposal_layer(rpn_cls_prob, rpn_bbox_pred, im_info, cfg_key, _feat_stride, anchors, num_anchors):

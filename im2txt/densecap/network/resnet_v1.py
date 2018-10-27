@@ -12,7 +12,7 @@ from tensorflow.contrib.slim.python.slim.nets.resnet_v1 import resnet_v1_block
 import numpy as np
 
 from .network import Network
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 
 
 def resnet_arg_scope(is_training=True,

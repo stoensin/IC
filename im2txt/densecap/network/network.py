@@ -11,17 +11,17 @@ import tensorflow.contrib.rnn as rnn
 import numpy as np
 import pdb
 
-from faster_rcnn.rpn.snippets import generate_anchors_pre
-from faster_rcnn.rpn.proposal_layer import proposal_layer
-from faster_rcnn.rpn.proposal_top_layer import proposal_top_layer
-from faster_rcnn.rpn.anchor_target_layer import anchor_target_layer
-from faster_rcnn.rpn.proposal_target_layer import proposal_target_layer
-from faster_rcnn.rpn.proposal_target_single_class_layer import proposal_target_single_class_layer
-from faster_rcnn.rpn.sentence_data_layer import sentence_data_layer
+from im2txt.faster_rcnn.rpn.snippets import generate_anchors_pre
+from im2txt.faster_rcnn.rpn.proposal_layer import proposal_layer
+from im2txt.faster_rcnn.rpn.proposal_top_layer import proposal_top_layer
+from im2txt.faster_rcnn.rpn.anchor_target_layer import anchor_target_layer
+from im2txt.faster_rcnn.rpn.proposal_target_layer import proposal_target_layer
+from im2txt.faster_rcnn.rpn.proposal_target_single_class_layer import proposal_target_single_class_layer
+from im2txt.faster_rcnn.rpn.sentence_data_layer import sentence_data_layer
 
-from faster_rcnn.utils.visualization import draw_bounding_boxes, draw_densecap
+from im2txt.faster_rcnn.utils.visualization import draw_bounding_boxes, draw_densecap
 
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 
 
 class Network(object):

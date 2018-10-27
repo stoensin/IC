@@ -7,10 +7,10 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from faster_rcnn.fast_rcnn.config import cfg
-import faster_rcnn.roi_data_layer.roidb as rdl_roidb
+from im2txt.faster_rcnn.fast_rcnn.config import cfg
+import im2txt.faster_rcnn.roi_data_layer.roidb as rdl_roidb
 from faster_rcnn.。roi_data_layer.layer import RoIDataLayer
-from faster_rcnn.utils.timer import Timer
+from im2txt.faster_rcnn.utils.timer import Timer
 try:
   import cPickle as pickle
 except ImportError:

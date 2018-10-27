@@ -11,13 +11,13 @@ import pdb
 import numpy as np
 import numpy.random as npr
 from six.moves import range
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 import PIL.Image as Image
 import PIL.ImageColor as ImageColor
 import PIL.ImageDraw as ImageDraw
 import PIL.ImageFont as ImageFont
-from faster_rcnn.fast_rcnn.nms_wrapper import nms
-from faster_rcnn.fast_rcnn.bbox_transform import clip_boxes, bbox_transform_inv
+from im2txt.faster_rcnn.fast_rcnn.nms_wrapper import nms
+from im2txt.faster_rcnn.fast_rcnn.bbox_transform import clip_boxes, bbox_transform_inv
 
 STANDARD_COLORS = [
     'AliceBlue', 'Chartreuse', 'Aqua', 'Aquamarine', 'Azure', 'Beige', 'Bisque',

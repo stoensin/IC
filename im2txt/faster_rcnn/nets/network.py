@@ -14,14 +14,14 @@ from tensorflow.contrib.slim import arg_scope
 
 import numpy as np
 
-from faster_rcnn.rpn.snippets import generate_anchors_pre, generate_anchors_pre_tf
-from faster_rcnn.rpn.proposal_layer import proposal_layer, proposal_layer_tf
-from faster_rcnn.rpn.proposal_top_layer import proposal_top_layer, proposal_top_layer_tf
-from faster_rcnn.rpn.anchor_target_layer import anchor_target_layer
-from faster_rcnn.rpn.proposal_target_layer import proposal_target_layer
-from faster_rcnn.rpn.utils.visualization import draw_bounding_boxes
+from im2txt.faster_rcnn.rpn.snippets import generate_anchors_pre, generate_anchors_pre_tf
+from im2txt.faster_rcnn.rpn.proposal_layer import proposal_layer, proposal_layer_tf
+from im2txt.faster_rcnn.rpn.proposal_top_layer import proposal_top_layer, proposal_top_layer_tf
+from im2txt.faster_rcnn.rpn.anchor_target_layer import anchor_target_layer
+from im2txt.faster_rcnn.rpn.proposal_target_layer import proposal_target_layer
+from im2txt.faster_rcnn.rpn.utils.visualization import draw_bounding_boxes
 
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 
 class Network(object):
   def __init__(self):

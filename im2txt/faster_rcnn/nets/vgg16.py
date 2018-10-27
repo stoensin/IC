@@ -14,7 +14,7 @@ from tensorflow.contrib.slim import arg_scope
 import numpy as np
 
 from nets.network import Network
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 
 class vgg16(Network):
   def __init__(self):

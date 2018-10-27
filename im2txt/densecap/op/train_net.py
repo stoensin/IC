@@ -10,12 +10,12 @@ import argparse
 import numpy as np
 import tensorflow as tf
 
-from densecap.config import cfg, cfg_from_file, cfg_from_list, get_output_dir, get_output_tb_dir
-from faster_rcnn.datasets.factory import get_imdb
-import faster_rcnn.datasets.imdb
-from densecap.train import get_training_roidb, train_net
-from densecap.network.vgg16 import vgg16
-from densecap.network.resnet_v1 import resnetv1
+from im2txt.densecap.config import cfg, cfg_from_file, cfg_from_list, get_output_dir, get_output_tb_dir
+from im2txt.faster_rcnn.datasets.factory import get_imdb
+import im2txt.faster_rcnn.datasets.imdb
+from im2txt.densecap.train import get_training_roidb, train_net
+from im2txt.densecap.network.vgg16 import vgg16
+from im2txt.densecap.network.resnet_v1 import resnetv1
 import pprint
 
 

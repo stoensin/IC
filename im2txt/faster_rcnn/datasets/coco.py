@@ -6,7 +6,7 @@
 
 from datasets.imdb import imdb
 import datasets.ds_utils as ds_utils
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 import os.path as osp
 import sys
 import os

@@ -6,9 +6,9 @@ import sys
 sys.path.append('../')
 
 from .config import cfg
-import faster_rcnn.roi_data_layer.roidb as rdl_roidb
-from faster_rcnn.roi_data_layer.layer import RoIDataLayer
-from faster_rcnn.utils.timer import Timer
+import im2txt.faster_rcnn.roi_data_layer.roidb as rdl_roidb
+from im2txt.faster_rcnn.roi_data_layer.layer import RoIDataLayer
+from im2txt.faster_rcnn.utils.timer import Timer
 from six.moves import cPickle as pickle
 import numpy as np
 import os

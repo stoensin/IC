@@ -9,8 +9,8 @@ from __future__ import division
 from __future__ import print_function
 
 from os.path import join as pjoin
-from densecap.config import cfg
-from faster_rcnn.roi_data_layer.minibatch import get_minibatch
+from im2txt.densecap.config import cfg
+from im2txt.faster_rcnn.roi_data_layer.minibatch import get_minibatch
 import numpy as np
 import time
 import json

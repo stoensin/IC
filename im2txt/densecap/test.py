@@ -10,17 +10,17 @@ import sys
 sys.path.append('../')
 
 
-from densecap.config import cfg, get_output_dir
+from im2txt.densecap.config import cfg, get_output_dir
 
-from faster_rcnn.fast_rcnn.bbox_transform import clip_boxes, bbox_transform_inv
-from faster_rcnn.fast_rcnn.nms_wrapper import nms
-from faster_rcnn.utils.blob import im_list_to_blob
-from faster_rcnn.utils.bbox_utils import region_merge, get_bbox_coord
-from faster_rcnn.utils.timer import Timer
+from im2txt.faster_rcnn.fast_rcnn.bbox_transform import clip_boxes, bbox_transform_inv
+from im2txt.faster_rcnn.fast_rcnn.nms_wrapper import nms
+from im2txt.faster_rcnn.utils.blob import im_list_to_blob
+from im2txt.faster_rcnn.utils.bbox_utils import region_merge, get_bbox_coord
+from im2txt.faster_rcnn.utils.timer import Timer
 
-from densecap.pycocoevalcap.vg_eval import VgEvalCap
-from densecap.beam_search import beam_search
-from densecap.vis_whtml import vis_whtml
+from im2txt.densecap.pycocoevalcap.vg_eval import VgEvalCap
+from im2txt.densecap.beam_search import beam_search
+from im2txt.densecap.vis_whtml import vis_whtml
 
 COCO_EVAL_PATH = 'coco-caption/'
 sys.path.append(COCO_EVAL_PATH)
@@ -313,8 +313,12 @@ def sentence(vocab, vocab_indices):
     return sentence
 
 
-def test_im(sess, net, im_path, vocab, pre_results, vis=True):
-    im = cv2.imread(im_path)
+def test_im(sess, net, img_data, vocab, pre_results, vis=True):
+    if len(img_data)>200:
+        nparr = np.fromstring(img_data, np.uint8)
+        im = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    else:
+        im = cv2.imread(img_data)
     scores, boxes, captions = im_detect(sess, net, im, None, use_box_at=-1)
     pos_dets = np.hstack((boxes, scores[:, np.newaxis])) \
         .astype(np.float32, copy=False)
@@ -324,8 +328,36 @@ def test_im(sess, net, im_path, vocab, pre_results, vis=True):
     pos_captions = [sentence(vocab, captions[idx]) for idx in keep]
     pos_boxes = boxes[keep, :]
     if vis:
-        vis_detections(im_path, im, pos_captions, pos_dets, save_path='./demo')
-        results = vis_whtml(im_path, im, pos_captions, pos_dets, pre_results)
+        vis_detections(img_data, im, pos_captions, pos_dets, save_path='./demo')
+        results = vis_whtml(img_data, im, pos_captions, pos_dets, pre_results)
+
+    return results
+
+def predict(sess, net, img_data, vocab, pre_results, vis=True):
+    if len(img_data)>200:
+        nparr = np.fromstring(img_data, np.uint8)
+        im = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    else:
+        im = cv2.imread(img_data)
+    scores, boxes, captions = im_detect(sess, net, im, None, use_box_at=-1)
+    pos_dets = np.hstack((boxes, scores[:, np.newaxis])) \
+        .astype(np.float32, copy=False)
+    keep = nms(pos_dets, cfg.TEST.NMS)
+    pos_dets = pos_dets[keep, :]
+    pos_scores = scores[keep]
+    pos_captions = [sentence(vocab, captions[idx]) for idx in keep]
+    pos_boxes = boxes[keep, :]
+
+    results=[]
+    num=0
+    for i, score in enumerate(pos_scores):
+        if i ==0:
+            continue
+        if i % 6 ==0:
+            pstr = pos_captions[i-6],pos_captions[i-5],pos_captions[i-4],pos_captions[i-3],pos_captions[i-2],pos_captions[i-1],pos_captions[i]
+            scores= pos_scores[i-6] + pos_scores[i-5]+pos_scores[i-4] + pos_scores[i-3]+pos_scores[i-2] + pos_scores[i-1]+ pos_scores[i]
+            results.append((num, pstr,scores))
+            num = num + 1
 
     return results
 

@@ -16,7 +16,7 @@ import numpy as np
 from collections import namedtuple
 
 from nets.network import Network
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 
 def separable_conv2d_same(inputs, kernel_size, stride, rate=1, scope=None):
   """Strided 2-D separable convolution with 'SAME' padding.

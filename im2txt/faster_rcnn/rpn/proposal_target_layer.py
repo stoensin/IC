@@ -10,9 +10,9 @@ from __future__ import print_function
 
 import numpy as np
 import numpy.random as npr
-from densecap.config import cfg
-from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform
-from faster_rcnn.utils.cython_bbox import bbox_overlaps
+from im2txt.densecap.config import cfg
+from im2txt.faster_rcnn.fast_rcnn.bbox_transform import bbox_transform
+from im2txt.faster_rcnn.utils.cython_bbox import bbox_overlaps
 
 
 def proposal_target_layer(rpn_rois, rpn_scores, gt_boxes, _num_classes):

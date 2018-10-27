@@ -11,9 +11,9 @@ from __future__ import print_function
 """Transform a roidb into a trainable roidb by adding a bunch of metadata."""
 
 import numpy as np
-from densecap.config import cfg
-from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform
-from faster_rcnn.utils.cython_bbox import bbox_overlaps
+from im2txt.densecap.config import cfg
+from im2txt.faster_rcnn.fast_rcnn.bbox_transform import bbox_transform
+from im2txt.faster_rcnn.utils.cython_bbox import bbox_overlaps
 from PIL import Image
 from six.moves import xrange
 

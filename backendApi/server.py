@@ -4,6 +4,7 @@ import os
 import sys
 import requests
 import signal
+import numpy
 
 from tornado import escape, httpserver, ioloop, web
 from tornado.options import define, options, parse_command_line
@@ -25,6 +26,17 @@ error_raised = []
 
 model_wrapper = ModelWrapper()
 
+class MyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, numpy.integer):
+            return int(obj)
+        elif isinstance(obj, numpy.floating):
+            return float(obj)
+        elif isinstance(obj, numpy.ndarray):
+            return obj.tolist()
+        else:
+            return super(MyEncoder, self).default(obj)
+
 class BaseHandler(web.RequestHandler):
     def set_default_header(self):
         self.set_header('Access-Control-Allow-Origin', '*')
@@ -34,7 +46,7 @@ class BaseHandler(web.RequestHandler):
 class PredictHandler(BaseHandler):
      def get(self):
         result = {'status': 'connect success!'}
-        self.finish(json.dumps(result))
+        self.finish(json.dumps(result,cls=MyEncoder))
     def post(self):
         result = {'status': 'error'}
 
@@ -47,14 +59,14 @@ class PredictHandler(BaseHandler):
         result['predictions'] = label_preds
         result['status'] = 'ok'
 
-        self.finish(json.dumps(result))
+        self.finish(json.dumps(result,cls=MyEncoder))
 
 
 class MainHandler(BaseHandler):
 
      def get(self):
         result = {'status': 'connect success!'}
-        self.finish(json.dumps(result))
+        self.finish(json.dumps(result,cls=MyEncoder))
 
 def valid_file_ext(filename):
     """Checks if the given filename contains a valid extension"""

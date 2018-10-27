@@ -17,7 +17,7 @@ import cPickle
 import subprocess
 import uuid
 from voc_eval import voc_eval
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 
 class pascal_voc(imdb):
     def __init__(self, image_set, year, devkit_path=None):

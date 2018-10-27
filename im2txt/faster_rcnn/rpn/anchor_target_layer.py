@@ -9,11 +9,11 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 import numpy as np
 import numpy.random as npr
-from faster_rcnn.utils.cython_bbox import bbox_overlaps
-from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform
+from im2txt.faster_rcnn.utils.cython_bbox import bbox_overlaps
+from im2txt.faster_rcnn.fast_rcnn.bbox_transform import bbox_transform
 
 
 def anchor_target_layer(rpn_cls_score, gt_boxes, im_info, _feat_stride, all_anchors, num_anchors):

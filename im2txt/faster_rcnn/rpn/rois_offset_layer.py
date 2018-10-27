@@ -3,8 +3,8 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
-from densecap.config import cfg
-from faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
+from im2txt.densecap.config import cfg
+from im2txt.faster_rcnn.fast_rcnn.bbox_transform import bbox_transform_inv, clip_boxes
 
 
 # compute the new bboxes shifted by offset from rois

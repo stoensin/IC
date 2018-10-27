@@ -14,8 +14,8 @@ import numpy as np
 import numpy.random as npr
 import cv2
 from six.moves import cPickle, xrange
-from densecap.config import cfg
-from faster_rcnn.utils.blob import prep_im_for_blob, im_list_to_blob
+from im2txt.densecap.config import cfg
+from im2txt.faster_rcnn.utils.blob import prep_im_for_blob, im_list_to_blob
 
 
 def get_minibatch(roidb):

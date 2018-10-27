@@ -12,12 +12,12 @@ import os
 
 import tensorflow as tf
 
-from densecap.test import test_net
-from densecap.config import cfg, cfg_from_file, cfg_from_list
-from faster_rcnn.datasets.factory import get_imdb
+from im2txt.densecap.test import test_net
+from im2txt.densecap.config import cfg, cfg_from_file, cfg_from_list
+from im2txt.faster_rcnn.datasets.factory import get_imdb
 
-from densecap.network.vgg16 import vgg16
-from densecap.network.resnet_v1 import resnetv1
+from im2txt.densecap.network.vgg16 import vgg16
+from im2txt.densecap.network.resnet_v1 import resnetv1
 
 
 def parse_args():

@@ -65,6 +65,9 @@ export default {
   }
   .lg-preview-title{
     font-size: 1rem!important;
+    height: 4rem!important;
+    line-height: 14px!important;
+    letter-spacing:1px;
   }
   .mint-spinner-snake{
     margin: 0 auto;

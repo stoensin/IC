@@ -8,10 +8,10 @@ import os.path as osp
 from PIL import Image
 import six
 from six.moves import xrange
-from faster_rcnn.utils.cython_bbox import bbox_overlaps
+from im2txt.faster_rcnn.utils.cython_bbox import bbox_overlaps
 import numpy as np
 import scipy.sparse
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 
 
 class imdb(object):

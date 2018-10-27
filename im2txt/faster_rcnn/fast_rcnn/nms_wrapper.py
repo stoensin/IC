@@ -8,9 +8,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from densecap.config import cfg
-from faster_rcnn.nms.gpu_nms import gpu_nms
-from faster_rcnn.nms.cpu_nms import cpu_nms
+from im2txt.densecap.config import cfg
+from im2txt.faster_rcnn.nms.gpu_nms import gpu_nms
+from im2txt.faster_rcnn.nms.cpu_nms import cpu_nms
 
 def nms(dets, thresh, force_cpu=False):
     """Dispatch to either CPU or GPU NMS implementations."""

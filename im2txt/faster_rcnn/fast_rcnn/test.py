@@ -16,12 +16,12 @@ except ImportError:
 import os
 import math
 
-from faster_rcnn.utils.timer import Timer
-from faster_rcnn.utils.blob import im_list_to_blob
+from im2txt.faster_rcnn.utils.timer import Timer
+from im2txt.faster_rcnn.utils.blob import im_list_to_blob
 
-from faster_rcnn.fast_rcnn.config import cfg, get_output_dir
-from faster_rcnn.fast_rcnn.bbox_transform import clip_boxes, bbox_transform_inv
-from faster_rcnn.fast_rcnn.nms_wrapper import nms
+from im2txt.faster_rcnn.fast_rcnn.config import cfg, get_output_dir
+from im2txt.faster_rcnn.fast_rcnn.bbox_transform import clip_boxes, bbox_transform_inv
+from im2txt.faster_rcnn.fast_rcnn.nms_wrapper import nms
 
 def _get_image_blob(im):
   """Converts an image into a network input.

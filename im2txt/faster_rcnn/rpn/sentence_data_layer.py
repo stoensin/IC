@@ -6,7 +6,7 @@ from __future__ import print_function
 retrieves region sentense for them."""
 
 from six.moves import cPickle
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 from collections import Counter
 import numpy as np
 import six

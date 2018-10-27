@@ -13,7 +13,7 @@ from six.moves import xrange, cPickle
 from os.path import join as pjoin
 
 from .imdb import imdb
-from densecap.config import cfg
+from im2txt.densecap.config import cfg
 
 
 DEBUG = False
