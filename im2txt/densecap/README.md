@@ -34,7 +34,7 @@
 
 * ckpt_path: the checkpoint path like './output/ckpt '
 * vocab_path:. the vocabulary file where you put like:'/output/ckpt/vocabulary.txt'
-
+* the pretrained model is here [model](https://drive.google.com/drive/folders/1AXlZREmP7fVi5qtHRWPyYwxiI4XpHle1?usp=sharing)
 
 > After this command will write results into the folder vis/data. We have provided a web-based visualizer to view these results; to use it, change to the vis directory and start a local HTTP server:
 
