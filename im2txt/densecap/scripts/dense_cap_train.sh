@@ -44,7 +44,7 @@ case $DATASET in
 esac
 
 
-LOG="logs/s${step}_${NET}_${TRAIN_IMDB}.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
+LOG="densecap/logs/s${step}_${NET}_${TRAIN_IMDB}.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
 
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
@@ -52,7 +52,7 @@ echo Logging output to "$LOG"
 # First step, freeze conv nets weights
 if [ ${step} -lt '2' ]
 then
-time python ./op/train_net.py \
+time python densecap/op/train_net.py \
     --weights ${ckpt_path} \
     --imdb ${TRAIN_IMDB} \
     --imdbval ${TEST_IMDB} \
@@ -67,7 +67,7 @@ fi
 NEW_WIGHTS=output/dc_conv_fixed/${TRAIN_IMDB}
 if [ ${step} -lt '3' ]
 then
-time python ./op/train_net.py \
+time python densecap/op/train_net.py \
     --weights ${NEW_WIGHTS} \
     --imdb ${TRAIN_IMDB} \
     --iters `expr ${ITERS1} - ${FINETUNE_AFTER1}` \
@@ -82,7 +82,7 @@ fi
 NEW_WIGHTS=output/dc_tune_conv/${TRAIN_IMDB}
 if [ ${step} -lt '4' ]
 then
-time python ./op/train_net.py \
+time python densecap/op/train_net.py \
     --weights ${ckpt_path} \
     --imdb ${TRAIN_IMDB} \
     --imdbval ${TEST_IMDB} \
@@ -97,7 +97,7 @@ fi
 NEW_WIGHTS=output/dc_context/${TRAIN_IMDB}
 if [ ${step} -lt '5' ]
 then
-time python ./op/train_net.py \
+time python densecap/op/train_net.py \
     --weights ${ckpt_path} \
     --imdb ${TRAIN_IMDB} \
     --imdbval ${TEST_IMDB} \

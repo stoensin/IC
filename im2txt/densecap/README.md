@@ -16,7 +16,7 @@
 ### STEP3
 
 #### train
->  bash scripts/dense_cap_train.sh [dataset] [net] [ckpt_to_init] [data_dir] [step]
+> [im2txt/] bash densecap/scripts/dense_cap_train.sh [dataset] [net] [ckpt_to_init] [data_dir] [step]
 
 
 * dataset: 'visual_genome_1.2'
@@ -30,7 +30,7 @@
     - step 4: finetune the whole model.
 
 #### test
-> bash scripts/dense_cap_demo.sh [ckpt_path] [vocab_path]
+> [im2txt/] bash densecap/scripts/dense_cap_demo.sh [ckpt_path] [vocab_path]
 
 * ckpt_path: the checkpoint path like './output/ckpt '
 * vocab_path:. the vocabulary file where you put like:'/output/ckpt/vocabulary.txt'

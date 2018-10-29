@@ -13,12 +13,12 @@ if [ -d '/content/' ]; then
     TEST_IMDB="vg_1.2_test"
 fi
 
-LOG="logs/test_log.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
+LOG="densecap/logs/test_log.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
 
-time python ./op/test_net.py  \
+time python densecap/op/test_net.py  \
   --ckpt ${CKPT} \
   --imdb ${TEST_IMDB} \
-  --cfg scripts/dense_cap_config.yml \
+  --cfg densecap/scripts/dense_cap_config.yml \
   --set ALL_TEST True
