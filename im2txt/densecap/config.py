@@ -3,7 +3,6 @@ from __future__ import division
 from __future__ import print_function
 
 """ config system for Densecap
-
 THis file specifies default config for Densecap. One can change the value of the file by
 writing a config file(in yaml) and use cfg_from_file(yaml_file) to load and override the
 default options.
@@ -13,6 +12,8 @@ import os
 import os.path as osp
 from os.path import join as pjoin
 import numpy as np
+# from distutils import spawn
+# run: pip install easydict
 from easydict import EasyDict as edict
 
 __C = edict()
@@ -38,7 +39,7 @@ __C.TRAIN.LEARNING_RATE = 0.001
 __C.TRAIN.WEIGHT_DECAY = 0.
 
 # clip norm for gradient clipping(tf.clip_by_norm)
-__C.TRAIN.CLIP_NORM = 40.
+__C.TRAIN.CLIP_NORM = 10.
 # Step size for reducing the learning rate, currently only support one step
 __C.TRAIN.STEPSIZE = [100000]
 
@@ -272,8 +273,8 @@ __C.ROOT_DIR = osp.abspath(pjoin(osp.dirname(__file__), '..'))
 
 # Data directory
 # __C.DATA_DIR = osp.abspath(pjoin(__C.ROOT_DIR, 'data'))
-
-__C.DATA_DIR = '/visual_genome'
+# TODO: delete testing options
+__C.DATA_DIR = '/home/joe/git/visual_genome/im2p'
 
 # Log directory
 __C.LOG_DIR = osp.abspath(pjoin(__C.ROOT_DIR, 'logs'))
@@ -282,11 +283,10 @@ __C.LOG_DIR = osp.abspath(pjoin(__C.ROOT_DIR, 'logs'))
 __C.CACHE_DIR = __C.DATA_DIR + '/1.2'
 
 # Dataset splits directory
-__C.SPLIT_DIR = osp.abspath(pjoin(__C.ROOT_DIR, 'info'))
+__C.SPLIT_DIR = osp.abspath(pjoin(__C.ROOT_DIR, 'data'))
 
 # Place outputs under an experiment directory
 __C.EXP_DIR = 'default'
-
 
 # For reproducibility
 __C.RNG_SEED = 3
@@ -300,7 +300,7 @@ __C.PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
 # __C.STORE_META_INFO = True
 
 # Use GPU implementation of non-maximum suppression
-__C.USE_GPU_NMS = False
+__C.USE_GPU_NMS = True
 
 # Default pooling mode, only 'crop' is available
 __C.POOLING_MODE = 'crop'
@@ -322,13 +322,13 @@ __C.FILTER_SMALL_BOX = False
 
 # Time steps for recurrent nets
 # It's related to the max_length of the sentence
-__C.TIME_STEPS = 12
+__C.TIME_STEPS = 22
 
 # For overall debug
 __C.DEBUG_ALL = True
 
 # maximum words for training and testing
-__C.MAX_WORDS = 10
+__C.MAX_WORDS = 20
 
 # index of word "<EOS>" in vocablury
 __C.END_INDEX = 2
@@ -407,6 +407,21 @@ __C.VOCAB_START_ID = 1
 # End id of vocabulary
 __C.VOCAB_END_ID = 2
 
+__C.IM2P = edict()
+
+__C.IM2P.S_MAX = 6
+
+__C.IM2P.POOLED_FEAT_DIM = 1024
+
+__C.IM2P.NUM_WORD_RNN_LAYERS = 2
+
+__C.IM2P.SENT_LOSS_W = 5.
+
+__C.IM2P.CAP_LOSS_W = 1.
+
+__C.IM2P.FINETUNE = False
+
+__C.IM2P.FIX_RPN = True
 
 #
 # Functions
@@ -416,7 +431,6 @@ __C.VOCAB_END_ID = 2
 def get_output_dir(imdb, weights_filename):
     """Return the directory where experimental artifacts are placed.
     If the directory does not exist, it is created.
-
     A canonical path is built using the name from an imdb and a network
     (if not None).
     """
@@ -431,7 +445,6 @@ def get_output_dir(imdb, weights_filename):
 def get_output_tb_dir(imdb, weights_filename):
     """Return the directory where tensorflow summaries are placed.
     If the directory does not exist, it is created.
-
     A canonical path is built using the name from an imdb and a network
     (if not None).
     """
@@ -453,7 +466,7 @@ def _merge_a_into_b(a, b):
 
     for k, v in a.items():
         # a must specify keys that are in b
-        if not  k in b:
+        if not k in b:
             raise KeyError('{} is not a valid config key'.format(k))
 
         # the types must match, too
@@ -494,10 +507,10 @@ def cfg_from_list(cfg_list):
         key_list = k.split('.')
         d = __C
         for subkey in key_list[:-1]:
-            assert subkey in d
+            assert subkey in  d
             d = d[subkey]
         subkey = key_list[-1]
-        assert subkey in d
+        assert subkey in  d
         try:
             value = literal_eval(v)
         except:

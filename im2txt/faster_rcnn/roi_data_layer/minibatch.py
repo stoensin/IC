@@ -23,15 +23,15 @@ def get_minibatch(roidb):
 
 
     num_images = len(roidb)
-    # print('num_images:',num_images)
+
     # Sample random scales to use for each image in this batch
     random_scale_inds = npr.randint(0, high=len(cfg.TRAIN.SCALES),
                                     size=num_images)
     assert (cfg.TRAIN.BATCH_SIZE % num_images == 0), \
         'num_images ({}) must divide BATCH_SIZE ({})'. \
-            format(num_images, cfg.TRAIN.BATCH_SIZE)
+        format(num_images, cfg.TRAIN.BATCH_SIZE)
 
-
+    # Get the input image blob, formatted for caffe
     im_blob, im_scales, roidb = _get_image_blob(roidb, random_scale_inds)
 
     blobs = {'data': im_blob}
@@ -44,18 +44,17 @@ def get_minibatch(roidb):
         gt_boxes = np.empty((len(gt_inds), 5), dtype=np.float32)
         gt_boxes[:, 0:4] = roidb[0]['boxes'][gt_inds, :] * im_scales[0]
         gt_boxes[:, 4] = roidb[0]['gt_classes'][gt_inds]
-
-        # print('gt_phrases:',roidb[0]['gt_phrases'])
-        blobs['gt_phrases'] = _process_gt_phrases(roidb[0]['gt_phrases'])
+        # TODO: add "gt_phrases"
+        blobs['gt_ptokens'] = _process_gt_phrases(roidb[0]['gt_ptokens'])
         blobs['gt_boxes'] = gt_boxes
         blobs['im_info'] = np.array(
+            # TODO: for blob format stick to tf_faster_rcnn version
             # [[im_blob.shape[2], im_blob.shape[3], im_scales[0]]],
             # [[im_blob.shape[1], im_blob.shape[2], im_scales[0]]],
             # make it shape [3,]
             [im_blob.shape[1], im_blob.shape[2], im_scales[0]],
             dtype=np.float32)
-
-    else:
+    else:  # not using RPN
         raise NotImplementedError
 
     return blobs
@@ -79,6 +78,7 @@ def _get_image_blob(roidb, scale_inds):
     num_images = len(scale_inds)
     processed_ims = []
     im_scales = []
+
 
     for i in xrange(num_images):
         im = cv2.imread(roidb[i]['image'])

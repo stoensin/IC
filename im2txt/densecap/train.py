@@ -42,7 +42,18 @@ class SolverWrapper(object):
         if not os.path.exists(self.tbvaldir):
             os.makedirs(self.tbvaldir)
 
+        # TODO: disable BBOX NORMALIZE
+        # if (cfg.TRAIN.HAS_RPN and cfg.TRAIN.BBOX_REG and
+        #         cfg.TRAIN.BBOX_NORMALIZE_TARGETS):
+            # RPN can only use precomputed normalization because there are no
+            # fixed statistics to compute a prior
+            # assert cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED
 
+        # if cfg.TRAIN.BBOX_REG:
+        #     print('Computing bounding-box regression targets...')
+        #     self.bbox_means, self.bbox_stds = \
+        #         rdl_roidb.add_bbox_regression_targets(roidb)
+        #     print('done')
 
     def snapshot(self, sess, iters=0):
         """Take a snapshot of the network after unnormalizing the learned
@@ -88,7 +99,9 @@ class SolverWrapper(object):
         print('Restoring model snapshots from {:s}'.format(sfile))
         self.saver.restore(sess, sfile)
         print('Restored.')
-        
+        # Needs to restore the other hyper-parameters/states for training, (TODO xinlei) I have
+        # tried my best to find the random states so that it can be recovered exactly
+        # However the Tensorflow state is currently not available
         with open(nfile, 'rb') as fid:
             st0 = pickle.load(fid)
             cur = pickle.load(fid)
@@ -148,6 +161,7 @@ class SolverWrapper(object):
             gvs = self.optimizer.compute_gradients(loss)
             # gradient clipping
             capped_gvs = [(tf.clip_by_norm(grad, cfg.TRAIN.CLIP_NORM), var)
+                          if grad is not None else (tf.zeros_like(var), var)
                           for grad, var in gvs]
             # Double the gradient of the bias if set
             if cfg.TRAIN.DOUBLE_BIAS:
@@ -310,9 +324,9 @@ class SolverWrapper(object):
         next_stepsize = stepsizes.pop()
 
         # In case the lr is restored from ckpt.
-        last_lr = sess.run(lr)
-        if rate != last_lr:
-            sess.run(tf.assign(lr, rate))
+        # last_lr = sess.run(lr)
+        # if rate != last_lr:
+        #     sess.run(tf.assign(lr, rate))
 
         while iters < max_iters + 1:
             # Learning rate
@@ -331,22 +345,24 @@ class SolverWrapper(object):
             # Get training data, one batch at a time
             blobs = self.data_layer.forward()
 
+            while blobs['gt_ptokens'].shape[0] == 0:
+                print(" ######## Jump over a training example")
+                blobs = self.data_layer.forward()
+
             now = time.time()
             if iters == 1 or now - last_summary_time > cfg.TRAIN.SUMMARY_INTERVAL:
                 # Compute the graph with summary
-                rpn_loss_cls, rpn_loss_box, loss_cls, loss_box, \
-                    caption_loss, total_loss, summary = \
+                sentence_loss, caption_loss, total_loss, summary = \
                     self.net.train_step_with_summary(sess, blobs, train_op)
                 self.writer.add_summary(summary, float(iters))
                 # Also check the summary on the validation set
-                blobs_val = self.data_layer_val.forward()
-                summary_val = self.net.get_summary(sess, blobs_val)
-                self.valwriter.add_summary(summary_val, float(iters))
+                # blobs_val = self.data_layer_val.forward()
+                # summary_val = self.net.get_summary(sess, blobs_val)
+                # self.valwriter.add_summary(summary_val, float(iters))
                 last_summary_time = now
             else:
                 # Compute the graph without summary
-                rpn_loss_cls, rpn_loss_box, loss_cls, loss_box, \
-                    caption_loss, total_loss = \
+                sentence_loss, caption_loss, total_loss = \
                     self.net.train_step(sess, blobs, train_op)
             timer.toc()
 
@@ -356,10 +372,10 @@ class SolverWrapper(object):
                     learning_rate = lr
                 else:
                     learning_rate = sess.run(lr)
-                print('iters: %d / %d, total loss: %.6f\n >>> caption loss: %.6f\n >>> rpn_loss_cls: %.6f\n '
-                      '>>> rpn_loss_box: %.6f\n >>> loss_cls: %.6f\n >>> loss_box: %.6f\n >>> lr: %f' %
-                      (iters, max_iters, total_loss, caption_loss, rpn_loss_cls,
-                       rpn_loss_box, loss_cls, loss_box, learning_rate.eval()))
+                print('iters: %d / %d, total loss: %.6f\n >>> caption loss: %.6f\n >>> sentence_loss: %.6f\n '
+                      '>>> lr: %f' %
+                      (iters, max_iters, total_loss, caption_loss, sentence_loss,
+                       float(learning_rate)))
                 print('speed: {:.3f}s / iters'.format(timer.average_time))
 
             # Snapshotting
@@ -407,7 +423,7 @@ class SolverWrapper(object):
 
 def get_training_roidb(imdb):
     """Returns a roidb (Region of Interest database) for use in training."""
-    if cfg.TRAIN.USE_FLIPPED :
+    if cfg.TRAIN.USE_FLIPPED:
         print('Appending horizontally-flipped training examples...')
         imdb.append_flipped_images()
         print('done')
@@ -447,8 +463,6 @@ def filter_roidb(roidb):
 def train_net(network, imdb, roidb, valroidb, output_dir, tb_dir,
               pretrained_model=None, max_iters=40000):
     """Train a Dense Caption network."""
-
-    roidb = filter_roidb(roidb)
 
     tfconfig = tf.ConfigProto(allow_soft_placement=True)
     tfconfig.gpu_options.allow_growth = True

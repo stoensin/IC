@@ -29,25 +29,24 @@ args = parser.parse_args()
 MAX_WORDS = args.max_words
 VG_VERSION = args.version
 VG_PATH = args.path
-
 VG_IMAGE_ROOT = '%s/images' % VG_PATH
+# read whole regions with a json file
+VG_REGION_PATH = '%s/%s/region_descriptions.json' % (VG_PATH, VG_VERSION)
 
-VG_REGION_PATH = '%s/%s/region_descriptions.json' % (VG_PATH,VG_VERSION)
+VG_PARA_PATH = '%s/%s/paragraphs_v1.json' % (VG_PATH, VG_VERSION)
 VG_METADATA_PATH = '%s/%s/image_data.json' % (VG_PATH, VG_VERSION)
 vocabulary_size = 10000
-HAS_VOCAB = False
-OUTPUT_DIR = args.output_dir + '/%s' % VG_VERSION
+HAS_VOCAB = True
+OUTPUT_DIR = args.output_dir
+SPLITS_PATH = '/content/im2txt/visual_genome/process'+ '/%s_split.json'
 
-READ_SPLITS_FROM_TXT = False
-SPLITS_JSON = 'split/data_splits.json'
 
 # UNK_IDENTIFIER is the word used to identify unknown words
 UNK_IDENTIFIER = '<unk>'
 
 
 class VGDataProcessor:
-    def __init__(self, split_name, image_data, regions_all=None, vocab=None,
-                 split_ids=[], max_words=MAX_WORDS):
+    def __init__(self, split_name, image_data, regions_all=None, paras_all=None, vocab=None, split_ids=[], max_words=MAX_WORDS):
         self.max_words = max_words
         self.images = {}
         phrases_all = []
@@ -62,19 +61,24 @@ class VGDataProcessor:
             # NOTE: for VG_1.2 and VG_1.0 the key in image_info about id is different.
             im_id = image_info['image_id']
 
-            if not im_id in split_ids:
+            if im_id not in split_ids:
                 continue
 
 
             item = regions_all[i]
-
             if item['id'] != im_id:
                 print('region and image metadata inconsistent with regions id: %s, image id: %s' %
                       (item['id'], image_info['image_id']))
                 exit()
+            if im_id not in paras_all:
+                print('region and image metadata inconsistent with paragraph id.')
+                exit()
             # tokenize phrase
             num_bbox += len(item['regions'])
             regions_filt = []
+
+            paragraph = paras_all[im_id]['paragraph']
+            paragraph_tokens = paras_all[im_id]['paragraph_tokens']
             for obj in item['regions']:
                 # remove invalid regions
                 if obj['x'] < 0 or obj['y'] < 0 or \
@@ -83,22 +87,17 @@ class VGDataProcessor:
                         obj['y'] + obj['height'] >= image_info['height']:
                     num_invalid_bbox += 1
                     continue
-                phrase = obj['phrase'].strip().encode('ascii', 'ignore').lower()
-
-                # remove empty sentence
-                if len(phrase) == 0:
-                    num_empty_phrase += 1
-                    continue
-
-                obj['phrase_tokens'] = phrase.translate(None, string.punctuation).split()
-                # remove regions with caption longer than max_words
-                if len(obj['phrase_tokens']) > max_words:
-                    continue
+                obj.pop('phrase')
+                obj.pop('image_id')
                 regions_filt.append(obj)
-                phrases_all.append(obj['phrase_tokens'])
+
+            phrases_all.extend(paragraph_tokens)
             im_path = '%s/%d.jpg' % (VG_IMAGE_ROOT, im_id)
             Dict = {'path': im_path, 'regions': regions_filt, 'id': im_id,
-                    'height': image_info['height'], 'width': image_info['width']}
+                    'height': image_info['height'], 'width': image_info['width'],
+                    'paragraph': paragraph,
+                    'paragraph_tokens': paragraph_tokens}
+
             self.images[item['id']] = Dict
 
         toc = time.time()
@@ -133,24 +132,36 @@ class VGDataProcessor:
 
 VG_IMAGE_PATTERN = '%s/%%d.jpg' % VG_IMAGE_ROOT
 
-# NOTE: one need to run read splits to generate separate splits
-SPLITS_PATTERN = 'split/%s.txt'
+
+def extract_paras(paras_json, max_words=MAX_WORDS):
+    all_paras = {}
+    num_filtered_sents = 0
+    for img in paras_json:
+        img_id = img['image_id']
+
+        paragraph = img['paragraph']
+        # sentences = []
+        sentences_tokens = []
+        for s in paragraph.split('.'):
+            phrase = s.strip().encode('ascii', 'ignore').lower()
+            if len(phrase) == 0:
+                continue
+            phrase_tokens = phrase.translate(None, string.punctuation).split()
+            if len(phrase_tokens) > max_words:
+                num_filtered_sents += 1
+                continue
+            # sentences.append(phrase)
+            sentences_tokens.append(phrase_tokens)
+        all_paras[img_id] = {"paragraph": paragraph,
+                             "paragraph_tokens": sentences_tokens}
+    print("Number of sentences filtered out: %d, with max_words: %d" % (num_filtered_sents, max_words))
+    return all_paras
 
 
-def process_dataset(split_name, vocab=None):
-    # 1. read split ids from separate txt files
-    if READ_SPLITS_FROM_TXT:
-        read_splits()
-        split_image_ids = []
-        with open(SPLITS_PATTERN % split_name, 'r') as split_file:
-            for line in split_file.readlines():
-                line_id = int(line.strip())
-                split_image_ids.append(line_id)
+def process_dataset(split_name, paras_all, vocab=None):
 
-    # 2. read split ids from json file
-    else:
-        with open(SPLITS_JSON, 'r') as f:
-            split_image_ids = json.load(f)[split_name]
+    with open(SPLITS_PATH % split_name, 'r') as f:
+        split_image_ids = json.load(f)
     print('split image number: %d for split name: %s' % (len(split_image_ids), split_name))
 
     print('start loading json files...')
@@ -161,7 +172,8 @@ def process_dataset(split_name, vocab=None):
     image_data = json.load(open(VG_METADATA_PATH))
     t2 = time.time()
     print('%f seconds for loading' % (t2 - t1))
-    processor = VGDataProcessor(split_name, image_data, regions_all,
+
+    processor = VGDataProcessor(split_name, image_data, regions_all, paras_all,
                                 split_ids=split_image_ids, vocab=vocab)
 
     if not os.path.exists(OUTPUT_DIR):
@@ -170,7 +182,8 @@ def process_dataset(split_name, vocab=None):
         vocab_out_path = '%s/vocabulary.txt' % OUTPUT_DIR
         processor.dump_vocabulary(vocab_out_path)
 
-    with open(OUTPUT_DIR + '/%s_gt_regions.json' % split_name, 'w') as f:
+    # dump image region dict
+    with open(OUTPUT_DIR + '/%s_gt_paragraph.json' % split_name, 'w') as f:
         json.dump(processor.images, f)
 
     return processor.vocabulary_inverted
@@ -178,15 +191,18 @@ def process_dataset(split_name, vocab=None):
 
 def process_vg():
     vocab = None
-
+    # use existing vocabulary
     if HAS_VOCAB:
         vocab_path = '%s/vocabulary.txt' % OUTPUT_DIR
         with open(vocab_path, 'r') as f:
             vocab = [line.strip() for line in f]
 
+    paras_json = json.load(open(VG_PARA_PATH))
+    paras_all = extract_paras(paras_json)
+
     datasets = ['train', 'val', 'test']
     for split_name in datasets:
-        vocab = process_dataset(split_name, vocab=vocab)
+        vocab = process_dataset(split_name, paras_all, vocab=vocab)
 
 
 if __name__ == "__main__":

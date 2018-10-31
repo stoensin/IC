@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Run with:
+#       bash scripts/dense_cap_train.sh [dataset] [net] [ckpt_to_init] [data_dir] [step]
+
 set -x
 set -e
 
@@ -11,31 +14,20 @@ ckpt_path=$3
 data_dir=$4
 step=$5
 
+# For my own experiment usage, just ignore it.
 if [ -d '/content' ]; then
     DATASET='visual_genome_1.2'
     NET='res50'
-    ckpt_path="res50/res50.ckpt"
-    data_dir='/content/visual_genome'
+    ckpt_path="/content/res50/res50_faster_rcnn_iter_1190000.ckpt"
+    data_dir='/content/output'
 fi
 
 case $DATASET in
-   visual_genome)
-    TRAIN_IMDB="vg_1.0_train"
-    TEST_IMDB="vg_1.0_val"
-    PT_DIR="dense_cap"
-    FINETUNE_AFTER1=200000
-    FINETUNE_AFTER2=100000
-    ITERS1=400000
-    ITERS2=300000
-    ;;
   visual_genome_1.2)
     TRAIN_IMDB="vg_1.2_train"
     TEST_IMDB="vg_1.2_val"
-    PT_DIR="dense_cap"
-    FINETUNE_AFTER1=200000
-    FINETUNE_AFTER2=100000
-    ITERS1=400000
-    ITERS2=300000
+    FINETUNE_AFTER=50000
+    ITERS=100000
     ;;
   *)
     echo "No dataset given"
@@ -44,7 +36,8 @@ case $DATASET in
 esac
 
 
-LOG="densecap/logs/s${step}_${NET}_${TRAIN_IMDB}.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
+LOG="logs/s${step}_${NET}_${TRAIN_IMDB}.txt.`date +'%Y-%m-%d_%H-%M-%S'`"
+
 
 exec &> >(tee -a "$LOG")
 echo Logging output to "$LOG"
@@ -56,54 +49,24 @@ time python densecap/op/train_net.py \
     --weights ${ckpt_path} \
     --imdb ${TRAIN_IMDB} \
     --imdbval ${TEST_IMDB} \
-    --iters ${FINETUNE_AFTER1}\
-    --cfg scripts/dense_cap_config.yml \
+    --iters ${FINETUNE_AFTER}\
+    --cfg densecap/scripts/dense_cap_config.yml \
     --data_dir ${data_dir} \
     --net ${NET} \
-    --set EXP_DIR dc_conv_fixed CONTEXT_FUSION False RESNET.FIXED_BLOCKS 3
+    --set EXP_DIR im2p_fixed IM2P.FINETUNE False
 fi
 
 # Step2: Finetune convnets
-NEW_WIGHTS=output/dc_conv_fixed/${TRAIN_IMDB}
+NEW_WIGHTS=output/im2p_fixed/${TRAIN_IMDB}
 if [ ${step} -lt '3' ]
 then
 time python densecap/op/train_net.py \
     --weights ${NEW_WIGHTS} \
     --imdb ${TRAIN_IMDB} \
-    --iters `expr ${ITERS1} - ${FINETUNE_AFTER1}` \
+    --iters `expr ${ITERS} - ${FINETUNE_AFTER}` \
     --imdbval ${TEST_IMDB} \
-    --cfg scripts/dense_cap_config.yml \
+    --cfg densecap/scripts/dense_cap_config.yml \
     --data_dir ${data_dir} \
     --net ${NET} \
-    --set EXP_DIR dc_tune_conv CONTEXT_FUSION False RESNET.FIXED_BLOCKS 1 TRAIN.LEARNING_RATE 0.00025
-fi
-
-# Step3: train with contex fusion
-NEW_WIGHTS=output/dc_tune_conv/${TRAIN_IMDB}
-if [ ${step} -lt '4' ]
-then
-time python densecap/op/train_net.py \
-    --weights ${ckpt_path} \
-    --imdb ${TRAIN_IMDB} \
-    --imdbval ${TEST_IMDB} \
-    --iters ${FINETUNE_AFTER2} \
-    --cfg scripts/dense_cap_config.yml \
-    --data_dir ${data_dir} \
-    --net ${NET} \
-    --set EXP_DIR dc_context CONTEXT_FUSION True RESNET.FIXED_BLOCKS 3 TRAIN.LEARNING_RATE 0.000125
-fi
-
-# Step4: finetune context fusion
-NEW_WIGHTS=output/dc_context/${TRAIN_IMDB}
-if [ ${step} -lt '5' ]
-then
-time python densecap/op/train_net.py \
-    --weights ${ckpt_path} \
-    --imdb ${TRAIN_IMDB} \
-    --imdbval ${TEST_IMDB} \
-    --iters `expr ${ITERS2} - ${FINETUNE_AFTER2}` \
-    --cfg scripts/dense_cap_config.yml \
-    --data_dir ${data_dir} \
-    --net ${NET} \
-    --set EXP_DIR dc_tune_context CONTEXT_FUSION True RESNET.FIXED_BLOCKS 1 TRAIN.LEARNING_RATE 0.0000625
+    --set EXP_DIR im2p_finetune RESNET.FIXED_BLOCKS 1 IM2P.FINETUNE True
 fi

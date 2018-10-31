@@ -49,12 +49,12 @@ def parse_args():
     parser.add_argument('--rand', dest='randomize',
                         help='randomize (do not use a fixed seed)',
                         action='store_true')
-
+    # TODO: add inception
     parser.add_argument('--net', dest='net',
                         help='vgg16, res50, res101, res152',
-                        default=None, type=str)
+                        default='res50', type=str)
     parser.add_argument('--data_dir', dest='data_dir', type=str,
-                        default='/home/joe/git/visual_genome', help='dataset directory')
+                        default='/home/joe/git/visual_genome/im2p', help='dataset directory')
     parser.add_argument('--embed_dim', dest='embed_dim', type=int,
                         default=512, help='embed dimension of words')
     parser.add_argument('--context_fusion', dest='context_fusion', action='store_true', help='train with context fusion.')
@@ -70,33 +70,29 @@ def parse_args():
     return args
 
 
-def combined_roidb(imdb_names):
-    # for now: imdb_names='vg_1.2_train'
-    def get_roidb(imdb_name):
-        imdb = get_imdb(imdb_name)
-        print('Loaded dataset `{:s}` for training'.format(imdb.name))
-        imdb.set_proposal_method(cfg.TRAIN.PROPOSAL_METHOD)
-        print('Set proposal method: {:s}'.format(cfg.TRAIN.PROPOSAL_METHOD))
-        roidb = get_training_roidb(imdb)
-        return roidb
+def GetRoidb(imdb_name):
+    """
+    Note: we need to run get_training_roidb sort of funcs later
+    for now, it only supports single roidb.
+    """
 
-    roidbs = [get_roidb(s) for s in imdb_names.split('+')]
-    roidb = roidbs[0]
-    if len(roidbs) > 1:
-        for r in roidbs[1:]:
-            roidb.extend(r)
-        imdb = lib.datasets.imdb.imdb(imdb_names)
-    else:
-        imdb = get_imdb(imdb_names)
+    imdb = get_imdb(imdb_name)
+    roidb = imdb.roidb
+
     return imdb, roidb
 
 
-
 def main():
+
     args = parse_args()
     cfg.DATA_DIR = args.data_dir
     cfg.CONTEXT_FUSION = args.context_fusion
-
+    # c_time = time.strftime('%m%d_%H%M', time.localtime())
+    # if not os.path.exists(cfg.LOG_DIR):
+    #     os.makedirs(cfg.LOG_DIR)
+    # file_handler = logging.FileHandler(pjoin(cfg.LOG_DIR,
+    #                                          args.network_name + '_%s.txt' % c_time))
+    # logging.getLogger().addHandler(file_handler)
 
     print('------ called with args: -------')
     pprint.pprint(args)
@@ -119,8 +115,7 @@ def main():
         np.random.seed(cfg.RNG_SEED)
         tf.set_random_seed(cfg.RNG_SEED)
 
-    imdb, roidb = combined_roidb(args.imdb_name)
-
+    imdb, roidb = GetRoidb(args.imdb_name)
 
     output_dir = get_output_dir(imdb, args.tag)
     print("output will be saved to `{:s}`".format(output_dir))
@@ -132,9 +127,7 @@ def main():
     # also add validation set, but with no flipping image
     orgflip = cfg.TRAIN.USE_FLIPPED
     cfg.TRAIN.USE_FLIPPED = False
-
-    _, valroidb = combined_roidb(args.imdbval_name)
-
+    _, valroidb = GetRoidb(args.imdbval_name)
     cfg.TRAIN.USE_FLIPPED = orgflip
 
     # load network
@@ -158,6 +151,7 @@ def main():
     else:
         pretrained_model = args.weights
 
+    # TODO: "imdb" may not be useful during training
     train_net(net, imdb, roidb, valroidb, output_dir, tb_dir,
               pretrained_model=pretrained_model,
               max_iters=args.max_iters)

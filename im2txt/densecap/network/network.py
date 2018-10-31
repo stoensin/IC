@@ -20,8 +20,17 @@ from im2txt.faster_rcnn.rpn.proposal_target_single_class_layer import proposal_t
 from im2txt.faster_rcnn.rpn.sentence_data_layer import sentence_data_layer
 
 from im2txt.faster_rcnn.utils.visualization import draw_bounding_boxes, draw_densecap
-
+from .paragraphmodel import paragraph_layer
 from im2txt.densecap.config import cfg
+
+
+
+
+
+
+
+
+
 
 
 class Network(object):
@@ -40,12 +49,14 @@ class Network(object):
 
         self._image = tf.placeholder(tf.float32, shape=[1, None, None, 3])
         self._im_info = tf.placeholder(tf.float32, shape=[3])
-
+        # add global roi
         if cfg.CONTEXT_FUSION:
             self._global_roi = tf.placeholder(tf.float32, shape=[1, 5])
         self._gt_boxes = tf.placeholder(tf.float32, shape=[None, 5])
-        
+        # add 2 for: <SOS> and <EOS>
         self._gt_phrases = tf.placeholder(tf.int32, shape=[None, cfg.MAX_WORDS])
+
+        self._gt_ptokens = tf.placeholder(tf.int32, shape=[None, cfg.MAX_WORDS])
 
         self._anchor_scales = cfg.ANCHOR_SCALES
         self._num_scales = len(self._anchor_scales)
@@ -208,6 +219,7 @@ class Network(object):
 
         return rpn_labels
 
+    # TODO: about to delete
     def _proposal_target_layer(self, rois, roi_scores, name):
         with tf.variable_scope(name) as scope:
             rois, roi_scores, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights = tf.py_func(
@@ -233,6 +245,7 @@ class Network(object):
 
             return rois, roi_scores
 
+    # TODO: roi_scores are not needed. About to delete
     def _proposal_target_single_class_layer(self, rois, roi_scores, name):
 
         with tf.variable_scope(name) as scope:
@@ -278,6 +291,21 @@ class Network(object):
 
             return rois, labels, phrases
 
+    def _paragraph_layer(self, name):
+        with tf.variable_scope(name) as scope:
+            num_sentences, sentence_lengths, sentence_labels, input_sentences, target_sentences = tf.py_func(paragraph_layer, [self._gt_ptokens], [tf.int32, tf.int32, tf.int32, tf.float32, tf.float32], name='paragraph_data')
+
+            target_sentences = tf.to_int32(target_sentences, name="to_int32")
+            input_sentences = tf.to_int32(input_sentences, name="to_int32")
+
+            self._paragraph_data = {}
+            self._paragraph_data['num_sentences'] = num_sentences
+            self._paragraph_data['sentence_lengths'] = sentence_lengths
+            self._paragraph_data['sentence_labels'] = sentence_labels
+            self._paragraph_data['target_sentences'] = target_sentences
+
+            return input_sentences
+
     def _sentence_data_layer(self, name,
                              time_steps=cfg.TIME_STEPS, mode=cfg.CONTEXT_MODE):
 
@@ -316,25 +344,27 @@ class Network(object):
 
         return input_sentence
 
-    def _embed_caption_layer(self, fc7, input_sentence, initializer, is_training):
+    def _embed_caption_layer(self, fc7, input_sentences, initializer, is_training):
         """
         comput image context feature and embed input sentence,
         do 'concat' or 'repeat' image feature
         """
-        region_features = slim.fully_connected(fc7, cfg.EMBED_DIM,
-                                              weights_initializer=initializer,
-                                              trainable=is_training,
-                                              activation_fn=None, scope='region_features')
-        if cfg.CONTEXT_FUSION:
-            # global_feature [1, cfg.EMBED_DIM(512)]
-            global_feature, region_features = tf.split(region_features, [1, -1], axis=0)
-            batch_size = tf.shape(region_features)[0]
-            # global_feature_rep [batch_size(256), cfg.EMBED_DIM(512)]
-            global_feature_rep = tf.tile(global_feature, [batch_size, 1])
-            gfeat_lstm_cell = rnn.BasicLSTMCell(cfg.EMBED_DIM, forget_bias=1.0,
-                state_is_tuple=True)
-        else:
-            batch_size = tf.shape(region_features)[0]
+        pooled_features = slim.fully_connected(fc7, cfg.IM2P.POOLED_FEAT_DIM,
+            weights_initializer=initializer,
+            trainable=is_training,
+            scope='pool_feature')
+        projected_features = tf.reduce_max(pooled_features, axis=0, name='project_feature')
+
+        # if cfg.CONTEXT_FUSION:
+        #     # global_feature [1, cfg.EMBED_DIM(512)]
+        #     global_feature, region_features = tf.split(region_features, [1, -1], axis=0)
+        #     batch_size = tf.shape(region_features)[0]
+        #     # global_feature_rep [batch_size(256), cfg.EMBED_DIM(512)]
+        #     global_feature_rep = tf.tile(global_feature, [batch_size, 1])
+        #     gfeat_lstm_cell = rnn.BasicLSTMCell(cfg.EMBED_DIM, forget_bias=1.0,
+        #         state_is_tuple=True)
+        # else:
+        #     batch_size = tf.shape(region_features)[0]
 
         with tf.variable_scope('seq_embedding'), tf.device("/cpu:0"):
             if cfg.INIT_BY_GLOVE and is_training:
@@ -364,7 +394,7 @@ class Network(object):
                                               # 0,1,2 for pad sos eof respectively.
                                               [cfg.VOCAB_SIZE + 3, cfg.EMBED_DIM],
                                               initializer=embed_initializer,
-                                              trainable=is_training,
+                                              trainable=is_training and cfg.IM2P.FINETUNE,
                                               dtype=tf.float32
                                               )
             print("Shape of embedding is {}".format(self._embedding.shape))
@@ -373,11 +403,12 @@ class Network(object):
                                                   # [cfg.EMBED_DIM, cfg.VOCAB_SIZE + 3],
                                                   # initializer=initializer)
             embed_input_sentence = tf.nn.embedding_lookup(self._embedding,
-                                                          input_sentence)
+                                                          input_sentences)
 
-        location_lstm_cell = rnn.BasicLSTMCell(cfg.EMBED_DIM, forget_bias=1.0, state_is_tuple=True)
+        sent_lstm_cell = rnn.BasicLSTMCell(cfg.EMBED_DIM, forget_bias=1.0, state_is_tuple=True)
+        # i.e. word lstm cells
         caption_lstm_cell = rnn.BasicLSTMCell(cfg.EMBED_DIM, forget_bias=1.0, state_is_tuple=True)
-
+        # caption_lstm_cell = rnn.MultiRNNCell([caption_lstm_cell] * cfg.IM2P.NUM_WORD_RNN_LAYERS, state_is_tuple=True)
         # add dropout in rnn
         # cell = rnn.DropoutWrapper(caption_lstm_cell,
         #                           input_keep_prob=prob,
@@ -385,59 +416,86 @@ class Network(object):
 
         with tf.variable_scope("lstm") as lstm_scope:
             # Feed the image embeddings to set the intial LSTM state
-            cap_zero_state = caption_lstm_cell.zero_state(
-                batch_size=batch_size, dtype=tf.float32)
-            loc_zero_state = location_lstm_cell.zero_state(
-                batch_size=batch_size, dtype=tf.float32)
-            with tf.variable_scope('cap_lstm'):
-                _, cap_init_state = caption_lstm_cell(region_features, cap_zero_state)
-            with tf.variable_scope('loc_lstm'):
-                _, loc_init_state = location_lstm_cell(region_features, loc_zero_state)
+            sent_zero_state = sent_lstm_cell.zero_state(
+                batch_size=cfg.TRAIN.IMS_PER_BATCH, dtype=tf.float32)
 
-            if cfg.CONTEXT_FUSION:
-                gfeat_zero_state = gfeat_lstm_cell.zero_state(
-                    batch_size=batch_size, dtype=tf.float32)
-                with tf.variable_scope('gfeat_lstm'):
-                    # NOTE: gfeat_init_state [batch_size(256), cfg.EMBED_DIM(512)]
-                    _, gfeat_init_state = gfeat_lstm_cell(global_feature_rep,
-                        gfeat_zero_state)
+            if self._mode == 'TRAIN':
+                # sent_length = [self._paragraph_data['num_sentences']]
+                sent_length = [tf.shape(input_sentences)[0]]
+            elif self._mode == 'TEST':
+                sent_length = [cfg.IM2P.S_MAX]
+
+            cap_zero_state = caption_lstm_cell.zero_state(
+                batch_size=sent_length[0], dtype=tf.float32)
+            tiled_feats = tf.tile(tf.expand_dims(projected_features, axis=[0]),
+                [sent_length[0], 1])
+
+            sent_outputs, sent_states = tf.nn.dynamic_rnn(sent_lstm_cell,
+                tf.expand_dims(tiled_feats, axis=0), sequence_length=sent_length,
+                dtype=tf.float32, scope='sent_lstm')
+            sent_outputs = tf.squeeze(sent_outputs, axis=[0])
+            self._sent_logits = slim.fully_connected(sent_outputs, 2,
+                weights_initializer=initializer,
+                trainable=is_training,
+                activation_fn=None,
+                scope="sent_distrib_logits")
+            self._sent_prob = tf.nn.softmax(self._sent_logits, name='sent_probs')
+
+            topic_vecs = slim.fully_connected(sent_outputs, 512,
+                weights_initializer=initializer,
+                trainable=is_training,
+                scope='topic_fc1')
+            topic_vecs = slim.fully_connected(topic_vecs, 512,
+                weights_initializer=initializer,
+                trainable=is_training,
+                scope='topic_fc2')
+
+            with tf.variable_scope('cap_lstm'):
+                _, cap_init_state = caption_lstm_cell(topic_vecs, cap_zero_state)
+
+            print(cap_init_state)
+            # if cfg.CONTEXT_FUSION:
+            #     gfeat_zero_state = gfeat_lstm_cell.zero_state(
+            #         batch_size=batch_size, dtype=tf.float32)
+            #     with tf.variable_scope('gfeat_lstm'):
+            #         # NOTE: gfeat_init_state [batch_size(256), cfg.EMBED_DIM(512)]
+            #         _, gfeat_init_state = gfeat_lstm_cell(global_feature_rep,
+            #             gfeat_zero_state)
 
             # Allow the LSTM variable to be reused
             lstm_scope.reuse_variables()
 
             if self._mode == 'TRAIN':
-                if cfg.CONTEXT_MODE == 'concat':
-                    im_context = tf.expand_dims(region_features, axis=1)
-                    im_concat_words = tf.concat([im_context, embed_input_sentence],
-                        axis=1)
-                    if cfg.CONTEXT_FUSION:
-                        global_feature_rep = tf.expand_dims(global_feature_rep, axis=1)
-                        global_concat_words = tf.concat([global_feature_rep,
-                            embed_input_sentence], axis=1)
-                else:
-                    raise NotImplementedError
+                # if cfg.CONTEXT_MODE == 'concat':
+                #     im_context = tf.expand_dims(region_features, axis=1)
+                #     im_concat_words = tf.concat([im_context, embed_input_sentence],
+                #         axis=1)
+                #     if cfg.CONTEXT_FUSION:
+                #         global_feature_rep = tf.expand_dims(global_feature_rep, axis=1)
+                #         global_concat_words = tf.concat([global_feature_rep,
+                #             embed_input_sentence], axis=1)
+                # else:
+                #     raise NotImplementedError
+                topic_concat_words = tf.concat((tf.expand_dims(topic_vecs, axis=1),
+                    embed_input_sentence), axis=1)
+                sequence_length = self._paragraph_data['sentence_lengths']
+                cap_outputs, cap_states = tf.nn.dynamic_rnn(caption_lstm_cell,
+                    topic_concat_words,
+                    sequence_length=sequence_length,
+                    dtype=tf.float32,
+                    scope='captoin_lstm')
 
-                sequence_length = self._sequence_length(input_sentence) + 1
-                cap_outputs, cap_states = tf.nn.dynamic_rnn(caption_lstm_cell, im_concat_words,
-                                                            sequence_length=sequence_length,
-                                                            dtype=tf.float32,
-                                                            scope='captoin_lstm')
-
-                loc_outputs, loc_states = tf.nn.dynamic_rnn(location_lstm_cell, im_concat_words,
-                                                            sequence_length=sequence_length,
-                                                            dtype=tf.float32,
-                                                            scope='location_lstm')
-                if cfg.CONTEXT_FUSION:
-                    gfeat_outputs, gfeat_states = tf.nn.dynamic_rnn(gfeat_lstm_cell,
-                        global_concat_words,
-                        sequence_length=sequence_length,
-                        dtype=tf.float32,
-                        scope='gfeat_lstm')
-                    # for now, it only support mode "sum"
-                    if cfg.CONTEXT_FUSION_MODE == "sum":
-                        cap_outputs = gfeat_outputs + cap_outputs
-                    else:
-                        raise NotImplementedError
+                # if cfg.CONTEXT_FUSION:
+                #     gfeat_outputs, gfeat_states = tf.nn.dynamic_rnn(gfeat_lstm_cell,
+                #         global_concat_words,
+                #         sequence_length=sequence_length,
+                #         dtype=tf.float32,
+                #         scope='gfeat_lstm')
+                #     # for now, it only support mode "sum"
+                #     if cfg.CONTEXT_FUSION_MODE == "sum":
+                #         cap_outputs = gfeat_outputs + cap_outputs
+                #     else:
+                #         raise NotImplementedError
 
                 # OUT OF MEMORY ON GPU
                 # inv_embedding = tf.tile(tf.expand_dims(tf.transpose(self._embedding),
@@ -450,87 +508,57 @@ class Network(object):
                 # cap_logits = tf.reshape(predict_cap_reshape,
                 #                         [-1, cfg.TIME_STEPS, cfg.VOCAB_SIZE + 3])
 
-                # problematic to always slice output of the last slice
-                # loc_out_slice = tf.slice(loc_outputs, [0, cfg.TIME_STEPS - 1, 0], [-1, 1, -1])
-                # loc_out_slice = tf.squeeze(loc_out_slice, [1])
-                # BETTER SOLUTION
-                cont_bbox = tf.expand_dims(self._sentence_data['cont_bbox'], axis=2)
-                loc_out_slice = tf.reduce_sum(loc_outputs * cont_bbox, axis=1)
-
             elif self._mode == 'TEST':
                 # In inference or test mode, use concatenated states for convenient feeding
                 tf.concat(values=cap_init_state, axis=1, name='cap_init_state')
-                tf.concat(values=loc_init_state, axis=1, name='loc_init_state')
 
                 # placeholder for feeding a batch of concatnated states.
                 cap_state_feed = tf.placeholder(dtype=tf.float32,
-                                                shape=[None, sum(caption_lstm_cell.state_size)],
+                                    # shape=[None, sum(caption_lstm_cell.state_size[0]) * 2],
+                                    shape=[None, sum(caption_lstm_cell.state_size)],
                                                 name='cap_state_feed')
-                loc_state_feed = tf.placeholder(dtype=tf.float32,
-                                                shape=[None, sum(location_lstm_cell.state_size)],
-                                                name='loc_state_feed')
-                cap_state_tuple = tf.split(value=cap_state_feed, num_or_size_splits=2, axis=1)
-                loc_state_tuple = tf.split(value=loc_state_feed, num_or_size_splits=2, axis=1)
 
+                # cap_state_tuple = tf.split(value=cap_state_feed, num_or_size_splits=4, axis=1)
+                cap_state_tuple = tf.split(value=cap_state_feed, num_or_size_splits=2, axis=1)
+                # cap_state_tuple = (rnn.LSTMStateTuple(cap_state_tuple[0], cap_state_tuple[1]), rnn.LSTMStateTuple(cap_state_tuple[2], cap_state_tuple[3]))
                 # Run a single LSTM step
-                seq_embedding = tf.squeeze(embed_input_sentence, axis=[1])
-                cap_outputs, cap_state_tuple = caption_lstm_cell(
+                seq_embedding=tf.squeeze(embed_input_sentence, axis=[1])
+                cap_outputs, cap_state_tuple=caption_lstm_cell(
                     inputs=seq_embedding,
                     state=cap_state_tuple
                 )
-                loc_outputs, loc_state_tuple = location_lstm_cell(
-                    inputs=seq_embedding,
-                    state=loc_state_tuple
-                )
 
+                # print(cap_state_tuple)
                 # Concatenate the resulting state
+                # self._cap_state = cap_state_tuple
                 tf.concat(values=cap_state_tuple, axis=1, name='cap_state')
-                tf.concat(values=loc_state_tuple, axis=1, name='loc_state')
-                loc_out_slice = loc_outputs
                 # NOTE CONTEXT FUSION
-                if cfg.CONTEXT_FUSION:
-                    tf.concat(values=gfeat_init_state, axis=1, name='gfeat_init_state')
-                    gfeat_state_feed = tf.placeholder(dtype=tf.float32,
-                        shape=[None, sum(gfeat_lstm_cell.state_size)],
-                        name='gfeat_state_feed')
-                    gfeat_state_tuple = tf.split(value=gfeat_state_feed, num_or_size_splits=2,
-                        axis=1)
-                    gfeat_outputs, gfeat_state_tuple = gfeat_lstm_cell(
-                        inputs=seq_embedding,
-                        state=gfeat_state_tuple)
-                    tf.concat(values=gfeat_state_tuple, axis=1, name='gfeat_state')
-                    if cfg.CONTEXT_FUSION_MODE == "sum":
-                        cap_outputs += gfeat_outputs
+                # if cfg.CONTEXT_FUSION:
+                #     tf.concat(values=gfeat_init_state, axis=1, name='gfeat_init_state')
+                #     gfeat_state_feed = tf.placeholder(dtype=tf.float32,
+                #         shape=[None, sum(gfeat_lstm_cell.state_size)],
+                #         name='gfeat_state_feed')
+                #     gfeat_state_tuple = tf.split(value=gfeat_state_feed, num_or_size_splits=2,
+                #         axis=1)
+                #     gfeat_outputs, gfeat_state_tuple = gfeat_lstm_cell(
+                #         inputs=seq_embedding,
+                #         state=gfeat_state_tuple)
+                #     tf.concat(values=gfeat_state_tuple, axis=1, name='gfeat_state')
+                #     if cfg.CONTEXT_FUSION_MODE == "sum":
+                #         cap_outputs += gfeat_outputs
 
             else:
                 raise NotImplementedError
 
             # caption logits
-            cap_logits = tf.matmul(tf.reshape(cap_outputs, [-1, cfg.EMBED_DIM]),
+            cap_logits=tf.matmul(tf.reshape(cap_outputs, [-1, cfg.EMBED_DIM]),
                 tf.transpose(self._embedding), name='cap_logits')
             # cap_logits = tf.matmul(tf.reshape(cap_outputs, [-1, cfg.EMBED_DIM]),
                 # self._inverse_embed, name='cap_logits')
-            cap_probs = tf.nn.softmax(cap_logits, name='cap_probs')
+            cap_probs=tf.nn.softmax(cap_logits, name='cap_probs')
 
-        bbox_pred = slim.fully_connected(loc_out_slice, 4,
-                                         weights_initializer=initializer,
-                                         trainable=is_training,
-                                         activation_fn=None, scope='bbox_pred')
-
-        self._predictions['bbox_pred'] = bbox_pred
-        self._predictions['cap_probs'] = cap_probs
-        self._predictions['predict_caption'] = cap_logits
-
-        if cfg.DEBUG_ALL:
-            self._for_debug['embedding'] = self._embedding
-            self._for_debug['embed_input_sentence'] = embed_input_sentence
-            self._for_debug['fc8'] = region_features
-            # self._for_debug['im_concat_words'] = im_concat_words
-            self._for_debug['captoin_outputs'] = cap_outputs
-            self._for_debug['loc_outputs'] = loc_outputs
-            self._for_debug['loc_out_slice'] = loc_out_slice
-            self._for_debug['bbox_pred'] = bbox_pred
-            self._for_debug['predict_caption'] = cap_logits
+        self._predictions['cap_probs']=cap_probs
+        self._predictions['predict_caption']=cap_logits
 
     def _sequence_length(self, input_sentence):
         return tf.reduce_sum(tf.cast(tf.cast(input_sentence, tf.bool), tf.int32), axis=1)
@@ -538,88 +566,77 @@ class Network(object):
     def _anchor_component(self):
         with tf.variable_scope('ANCHOR_' + self._tag) as scope:
             # just to get the shape right
-            height = tf.to_int32(tf.ceil(self._im_info[0] / np.float32(self._feat_stride[0])))
-            width = tf.to_int32(tf.ceil(self._im_info[1] / np.float32(self._feat_stride[0])))
-            anchors, anchor_length = tf.py_func(generate_anchors_pre,
+            height=tf.to_int32(tf.ceil(self._im_info[0] / np.float32(self._feat_stride[0])))
+            width=tf.to_int32(tf.ceil(self._im_info[1] / np.float32(self._feat_stride[0])))
+            anchors, anchor_length=tf.py_func(generate_anchors_pre,
                                                 [height, width,
                                                  self._feat_stride, self._anchor_scales, self._anchor_ratios],
                                                 [tf.float32, tf.int32], name="generate_anchors")
             anchors.set_shape([None, 4])
             anchor_length.set_shape([])
-            self._anchors = anchors
-            self._anchor_length = anchor_length
+            self._anchors=anchors
+            self._anchor_length=anchor_length
 
         if cfg.DEBUG_ALL:
-            self._for_debug['anchors'] = anchors
+            self._for_debug['anchors']=anchors
 
     def _build_network(self, is_training=True):
-        # typeof initializers
+        # select initializers
         if cfg.TRAIN.WEIGHT_INITIALIZER == 'truncated':
-            initializer = tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
+            initializer=tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
             # initializer_bbox = tf.truncated_normal_initializer(mean=0.0, stddev=0.001)
         elif cfg.TRAIN.WEIGHT_INITIALIZER == 'normal':
-            initializer = tf.random_normal_initializer(mean=0.0, stddev=0.01)
+            initializer=tf.random_normal_initializer(mean=0.0, stddev=0.01)
             # initializer_bbox = tf.random_normal_initializer(mean=0.0, stddev=0.001)
         else:
-            initializer = tf.contrib.layers.xavier_initializer()
+            initializer=tf.contrib.layers.xavier_initializer()
             # initializer_bbox = tf.contrib.layers.xavier_initializer()
 
-        net_conv = self._image_to_head(is_training)
-
+        net_conv=self._image_to_head(is_training)
         with tf.variable_scope(self._scope + '/Extraction'):
             # build the anchors for the image
             self._anchor_component()
             # region proposal network
-            rois = self._region_proposal(net_conv, is_training, initializer)
+            rois=self._region_proposal(net_conv, is_training, initializer)
             # region of interest pooling
             if cfg.POOLING_MODE == 'crop':
-                pool5 = self._crop_pool_layer(net_conv, rois, "pool5")
+                pool5=self._crop_pool_layer(net_conv, rois, "pool5")
             else:
                 raise NotImplementedError
 
             if self._mode == 'TRAIN':
                 # sentence data layer
-                input_sentence = self._sentence_data_layer('sentence_data')
+                # input_sentence = self._sentence_data_layer('sentence_data')
+                input_sentences=self._paragraph_layer('paragraph_data')
             elif self._mode == 'TEST':
-                input_feed = tf.placeholder(dtype=tf.int32,
+                input_feed=tf.placeholder(dtype=tf.int32,
                                             shape=[None],
                                             name='input_feed')
-                input_sentence = tf.expand_dims(input_feed, 1)
+                input_sentences=tf.expand_dims(input_feed, 1)
             else:
                 raise NotImplementedError
 
-        fc7 = self._head_to_tail(pool5, is_training)
-
+        fc7=self._head_to_tail(pool5, is_training)
         with tf.variable_scope(self._scope + '/Prediction'):
-            # add context fusion
-            if cfg.CONTEXT_FUSION:
-                # global feature after "head_to_tail" is dumped
-                _, fc7_1 = tf.split(fc7, [1, -1], axis=0)
-            else:
-                fc7_1 = fc7
-            # region classification
-            cls_prob = self._region_classification(fc7_1, is_training,
-                                                   initializer)
-            self._embed_caption_layer(fc7, input_sentence, initializer, is_training)
+            self._embed_caption_layer(fc7, input_sentences, initializer, is_training)
 
         self._score_summaries.update(self._predictions)
 
         if cfg.DEBUG_ALL:
-            self._for_debug['pool5'] = pool5
-            self._for_debug['cls_prob'] = cls_prob
+            self._for_debug['pool5']=pool5
 
-        return rois, cls_prob
+        return rois
 
     def _smooth_l1_loss(self, bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights, sigma=1.0, dim=[1]):
-        sigma_2 = sigma ** 2
-        box_diff = bbox_pred - bbox_targets
-        in_box_diff = bbox_inside_weights * box_diff
-        abs_in_box_diff = tf.abs(in_box_diff)
-        smoothL1_sign = tf.stop_gradient(tf.to_float(tf.less(abs_in_box_diff, 1. / sigma_2)))
-        in_loss_box = tf.pow(in_box_diff, 2) * (sigma_2 / 2.) * smoothL1_sign \
+        sigma_2=sigma ** 2
+        box_diff=bbox_pred - bbox_targets
+        in_box_diff=bbox_inside_weights * box_diff
+        abs_in_box_diff=tf.abs(in_box_diff)
+        smoothL1_sign=tf.stop_gradient(tf.to_float(tf.less(abs_in_box_diff, 1. / sigma_2)))
+        in_loss_box=tf.pow(in_box_diff, 2) * (sigma_2 / 2.) * smoothL1_sign \
             + (abs_in_box_diff - (0.5 / sigma_2)) * (1. - smoothL1_sign)
-        out_loss_box = bbox_outside_weights * in_loss_box
-        loss_box = tf.reduce_mean(tf.reduce_sum(
+        out_loss_box=bbox_outside_weights * in_loss_box
+        loss_box=tf.reduce_mean(tf.reduce_sum(
             out_loss_box,
             axis=dim
         ))
@@ -628,148 +645,160 @@ class Network(object):
     def _add_losses(self, sigma_rpn=3.0):
         with tf.variable_scope('LOSS_' + self._tag) as scope:
             # RPN, class loss
-            rpn_cls_score = tf.reshape(self._predictions['rpn_cls_score_reshape'], [-1, 2])
-            rpn_label = tf.reshape(self._anchor_targets['rpn_labels'], [-1])
-            rpn_select = tf.where(tf.not_equal(rpn_label, -1))
-            rpn_cls_score = tf.reshape(tf.gather(rpn_cls_score, rpn_select), [-1, 2])
-            rpn_label = tf.reshape(tf.gather(rpn_label, rpn_select), [-1])
-            rpn_cross_entropy = tf.reduce_mean(
-                tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rpn_cls_score,
-                                                               labels=rpn_label))
+            # rpn_cls_score = tf.reshape(self._predictions['rpn_cls_score_reshape'], [-1, 2])
+            # rpn_label = tf.reshape(self._anchor_targets['rpn_labels'], [-1])
+            # rpn_select = tf.where(tf.not_equal(rpn_label, -1))
+            # rpn_cls_score = tf.reshape(tf.gather(rpn_cls_score, rpn_select), [-1, 2])
+            # rpn_label = tf.reshape(tf.gather(rpn_label, rpn_select), [-1])
+            # rpn_cross_entropy = tf.reduce_mean(
+            #     tf.nn.sparse_softmax_cross_entropy_with_logits(logits=rpn_cls_score,
+            #                                                    labels=rpn_label))
 
-            # RPN, bbox loss
-            rpn_bbox_pred = self._predictions['rpn_bbox_pred']
-            rpn_bbox_targets = self._anchor_targets['rpn_bbox_targets']
-            rpn_bbox_inside_weights = self._anchor_targets['rpn_bbox_inside_weights']
-            rpn_bbox_outside_weights = self._anchor_targets['rpn_bbox_outside_weights']
-            rpn_loss_box = self._smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
-                                                rpn_bbox_outside_weights,
-                                                sigma=sigma_rpn, dim=[1, 2, 3])
+            # # RPN, bbox loss
+            # rpn_bbox_pred = self._predictions['rpn_bbox_pred']
+            # rpn_bbox_targets = self._anchor_targets['rpn_bbox_targets']
+            # rpn_bbox_inside_weights = self._anchor_targets['rpn_bbox_inside_weights']
+            # rpn_bbox_outside_weights = self._anchor_targets['rpn_bbox_outside_weights']
+            # rpn_loss_box = self._smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
+            #                                     rpn_bbox_outside_weights,
+            #                                     sigma=sigma_rpn, dim=[1, 2, 3])
 
-            # class loss
-            cls_score = self._predictions["cls_score"]
-            label = tf.reshape(self._proposal_targets["clss"], [-1])
-            clss_cross_entropy = tf.reduce_mean(
-                tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=label))
+            # # class loss
+            # cls_score = self._predictions["cls_score"]
+            # label = tf.reshape(self._proposal_targets["clss"], [-1])
+            # clss_cross_entropy = tf.reduce_mean(
+            #     tf.nn.sparse_softmax_cross_entropy_with_logits(logits=cls_score, labels=label))
 
-            # bbox loss
-            bbox_pred = self._predictions['bbox_pred']
-            bbox_targets = self._proposal_targets['bbox_targets']
-            # bbox_inside_weights = self._proposal_targets['bbox_inside_weights']
-            # bbox_outside_weights = self._proposal_targets['bbox_outside_weights']
-            loss_box = self._smooth_l1_loss(bbox_pred, bbox_targets,
-                                            1., 1.)
+            # # bbox loss
+            # bbox_pred = self._predictions['bbox_pred']
+            # bbox_targets = self._proposal_targets['bbox_targets']
+            # # bbox_inside_weights = self._proposal_targets['bbox_inside_weights']
+            # # bbox_outside_weights = self._proposal_targets['bbox_outside_weights']
+            # loss_box = self._smooth_l1_loss(bbox_pred, bbox_targets,
+            #                                 1., 1.)
 
             # caption loss
             # shape [None*12, 10003]
-            target_sentence = self._sentence_data['target_sentence']
-            predict_caption = self._predictions['predict_caption']
-            target_sentence = tf.reshape(target_sentence, [-1])
-            cap_mask = tf.reshape(tf.to_float(tf.cast(target_sentence, tf.bool)), [-1])
-            captoin_cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=predict_caption,
-                                                                                   labels=target_sentence)
-            caption_loss = tf.div(tf.reduce_sum(tf.multiply(captoin_cross_entropy, cap_mask)),
-                                  tf.reduce_sum(cap_mask), name='caption_loss')
+            target_sentence=self._paragraph_data['target_sentences']
+            predict_caption=self._predictions['predict_caption']
+            target_sentence=tf.reshape(target_sentence, [-1])
+            cap_mask=tf.reshape(tf.to_float(tf.cast(target_sentence, tf.bool)), [-1])
+            captoin_cross_entropy=tf.nn.sparse_softmax_cross_entropy_with_logits(logits=predict_caption,
+                labels=target_sentence)
+            caption_loss=tf.div(tf.reduce_sum(tf.multiply(captoin_cross_entropy, cap_mask)), tf.reduce_sum(cap_mask), name='caption_loss')
 
-            self._losses['clss_cross_entropy'] = clss_cross_entropy
-            self._losses['loss_box'] = loss_box
-            self._losses['rpn_cross_entropy'] = rpn_cross_entropy
-            self._losses['rpn_loss_box'] = rpn_loss_box
-            self._losses['caption_loss'] = caption_loss
+            # sentense loss
+            sent_labels=self._paragraph_data['sentence_labels']
+            self._sent_logits=tf.reshape(self._sent_logits, [-1, 2])
+            sent_cross_entropy=tf.nn.sparse_softmax_cross_entropy_with_logits(
+                logits=self._sent_logits, labels=sent_labels)
+            sent_loss=tf.reduce_mean(sent_cross_entropy, name='sentense_loss')
 
-            loss = cfg.LOSS.CAP_W * caption_loss \
-                + cfg.LOSS.CLS_W * clss_cross_entropy \
-                + cfg.LOSS.BBOX_W * loss_box \
-                + cfg.LOSS.RPN_CLS_W * rpn_cross_entropy \
-                + cfg.LOSS.RPN_BBOX_W * rpn_loss_box
-            regularization_loss = tf.add_n(tf.losses.get_regularization_losses(), 'regu')
-            self._losses['total_loss'] = loss + regularization_loss
+            # self._losses['clss_cross_entropy'] = clss_cross_entropy
+            # self._losses['loss_box'] = loss_box
+            # self._losses['rpn_cross_entropy'] = rpn_cross_entropy
+            # self._losses['rpn_loss_box'] = rpn_loss_box
+            self._losses['caption_loss']=caption_loss
+            self._losses['sentence_loss']=sent_loss
+
+            # loss = cfg.LOSS.CAP_W * caption_loss \
+            #     + cfg.LOSS.CLS_W * clss_cross_entropy \
+            #     + cfg.LOSS.BBOX_W * loss_box \
+            #     + cfg.LOSS.RPN_CLS_W * rpn_cross_entropy \
+            #     + cfg.LOSS.RPN_BBOX_W * rpn_loss_box
+            loss=cfg.IM2P.SENT_LOSS_W * sent_loss + cfg.IM2P.CAP_LOSS_W * caption_loss
+
+            regularization_loss=tf.add_n(tf.losses.get_regularization_losses(), 'regu')
+            self._losses['total_loss']=loss + regularization_loss
 
             self._event_summaries.update(self._losses)
 
             if cfg.DEBUG_ALL:
-                self._for_debug['loss'] = loss
-                self._for_debug['total_loss'] = loss
+                self._for_debug['loss']=loss
+                self._for_debug['total_loss']=total_loss
 
         return loss
 
     def _region_proposal(self, net_conv, is_training, initializer):
-        rpn = slim.conv2d(net_conv, cfg.RPN_CHANNELS, [3, 3], trainable=is_training,
+        rpn=slim.conv2d(net_conv, cfg.RPN_CHANNELS, [3, 3],
+                          trainable=is_training and cfg.IM2P.FINETUNE,
                           weights_initializer=initializer,
                           scope="rpn_conv/3x3")
         self._act_summaries.append(rpn)
-        rpn_cls_score = slim.conv2d(rpn, self._num_anchors * 2, [1, 1], trainable=is_training,
+        rpn_cls_score=slim.conv2d(rpn, self._num_anchors * 2, [1, 1],
+            trainable=is_training and cfg.IM2P.FINETUNE,
                                     weights_initializer=initializer,
                                     padding='VALID', activation_fn=None, scope='rpn_cls_score')
         # change it so that the score has 2 as its channel size
-        rpn_cls_score_reshape = self._reshape_layer(rpn_cls_score, 2, 'rpn_cls_score_reshape')
-        rpn_cls_prob_reshape = self._softmax_layer(rpn_cls_score_reshape, "rpn_cls_prob_reshape")
+        rpn_cls_score_reshape=self._reshape_layer(rpn_cls_score, 2, 'rpn_cls_score_reshape')
+        rpn_cls_prob_reshape=self._softmax_layer(rpn_cls_score_reshape, "rpn_cls_prob_reshape")
         # rpn_cls_pred = tf.argmax(tf.reshape(rpn_cls_score_reshape, [-1, 2]), axis=1, name="rpn_cls_pred")
-        rpn_cls_prob = self._reshape_layer(rpn_cls_prob_reshape, self._num_anchors * 2, "rpn_cls_prob")
-        rpn_bbox_pred = slim.conv2d(rpn, self._num_anchors * 4, [1, 1], trainable=is_training,
+        rpn_cls_prob=self._reshape_layer(rpn_cls_prob_reshape, self._num_anchors * 2, "rpn_cls_prob")
+        rpn_bbox_pred=slim.conv2d(rpn, self._num_anchors * 4, [1, 1],
+            trainable=is_training and cfg.IM2P.FINETUNE,
                                     weights_initializer=initializer,
                                     padding='VALID', activation_fn=None, scope='rpn_bbox_pred')
-        if is_training:
-            rois, roi_scores = self._proposal_layer(rpn_cls_prob, rpn_bbox_pred, "rois")
-            rpn_labels = self._anchor_target_layer(rpn_cls_score, "anchor")
-            # Try to have a deterministic order for the computing graph, for reproducibility
-            with tf.control_dependencies([rpn_labels]):
-                # rois, _ = self._proposal_target_layer(rois, roi_scores, "rpn_rois")
-                rois, labels, phrases = self._proposal_target_single_class_layer(rois, roi_scores, "rpn_rois")
+        # if is_training:
+        #     rois, roi_scores = self._proposal_layer(rpn_cls_prob, rpn_bbox_pred, "rois")
+        #     rpn_labels = self._anchor_target_layer(rpn_cls_score, "anchor")
+        #     # Try to have a deterministic order for the computing graph, for reproducibility
+        #     with tf.control_dependencies([rpn_labels]):
+        #         # rois, _ = self._proposal_target_layer(rois, roi_scores, "rpn_rois")
+        #         rois, labels, phrases = self._proposal_target_single_class_layer(rois, roi_scores, "rpn_rois")
 
-                self._roi_labels = labels
-                self._roi_phrases = phrases
+        #         self._roi_labels = labels
+        #         self._roi_phrases = phrases
+        # else:
+        if cfg.TEST.MODE == 'nms':
+            rois, _=self._proposal_layer(rpn_cls_prob, rpn_bbox_pred, "rois")
+        elif cfg.TEST.MODE == 'top':
+            rois, _=self._proposal_top_layer(rpn_cls_prob, rpn_bbox_pred, "rois")
         else:
-            if cfg.TEST.MODE == 'nms':
-                rois, _ = self._proposal_layer(rpn_cls_prob, rpn_bbox_pred, "rois")
-            elif cfg.TEST.MODE == 'top':
-                rois, _ = self._proposal_top_layer(rpn_cls_prob, rpn_bbox_pred, "rois")
-            else:
-                raise NotImplementedError
+            raise NotImplementedError
 
-        self._predictions["rpn_cls_score"] = rpn_cls_score
-        self._predictions["rpn_cls_score_reshape"] = rpn_cls_score_reshape
-        self._predictions["rpn_cls_prob"] = rpn_cls_prob
+        self._predictions["rpn_cls_score"]=rpn_cls_score
+        self._predictions["rpn_cls_score_reshape"]=rpn_cls_score_reshape
+        self._predictions["rpn_cls_prob"]=rpn_cls_prob
         # self._predictions["rpn_cls_pred"] = rpn_cls_pred
-        self._predictions["rpn_bbox_pred"] = rpn_bbox_pred
-        self._predictions["rois"] = rois
+        self._predictions["rpn_bbox_pred"]=rpn_bbox_pred
+        self._predictions["rois"]=rois
 
         # NOTE: add context feature
         if cfg.CONTEXT_FUSION:
-            rois = tf.concat((self._global_roi, rois), axis=0)
+            rois=tf.concat((self._global_roi, rois), axis=0)
             print("Using context fusion, with shape of rois: {}".format(rois.shape))
 
         if cfg.DEBUG_ALL:
-            self._for_debug['rpn'] = rpn
-            self._for_debug['rpn_cls_score'] = rpn_cls_score
-            self._for_debug['rpn_cls_prob'] = rpn_cls_prob
-            self._for_debug['rpn_cls_prob_reshape'] = rpn_cls_prob_reshape
-            self._for_debug['rpn_cls_score_reshape'] = rpn_cls_score_reshape
-            self._for_debug['rpn_bbox_pred'] = rpn_bbox_pred
+            self._for_debug['rpn']=rpn
+            self._for_debug['rpn_cls_score']=rpn_cls_score
+            self._for_debug['rpn_cls_prob']=rpn_cls_prob
+            self._for_debug['rpn_cls_prob_reshape']=rpn_cls_prob_reshape
+            self._for_debug['rpn_cls_score_reshape']=rpn_cls_score_reshape
+            self._for_debug['rpn_bbox_pred']=rpn_bbox_pred
         return rois
 
+    # TODO: clear stuff
     def _region_classification(self, fc7, is_training, initializer):
-        # predict two class: fg or bg :as each anchor as fg/bg/ignore.
-        cls_score = slim.fully_connected(fc7, self._num_classes + 1,
+        # predict two class: fg or bg
+        cls_score=slim.fully_connected(fc7, self._num_classes + 1,
                                          weights_initializer=initializer,
                                          trainable=is_training,
                                          activation_fn=None, scope='cls_score')
-        cls_prob = self._softmax_layer(cls_score, "cls_prob")
+        cls_prob=self._softmax_layer(cls_score, "cls_prob")
         # cls_pred = tf.argmax(cls_score, axis=1, name="cls_pred")
         # bbox_pred = slim.fully_connected(fc7, self._num_classes * 4,
         #                                  weights_initializer=initializer_bbox,
         #                                  trainable=is_training,
         #                                  activation_fn=None, scope='bbox_pred')
 
-        self._predictions["cls_score"] = cls_score
+        self._predictions["cls_score"]=cls_score
         # self._predictions["cls_pred"] = cls_pred
-        self._predictions["cls_prob"] = cls_prob
+        self._predictions["cls_prob"]=cls_prob
         # self._predictions["bbox_pred"] = bbox_pred
 
         return cls_prob
 
     def _image_to_head(self, is_training, reuse=None):
-        print('NotImplementedError')
         raise NotImplementedError
 
     def _head_to_tail(self, pool5, is_training, reuse=None):
@@ -777,22 +806,22 @@ class Network(object):
 
     def create_architecture(self, mode, num_classes=1, tag=None,
                             ):
-        self._tag = tag
+        self._tag=tag
 
-        self._num_classes = num_classes
-        self._mode = mode
+        self._num_classes=num_classes
+        self._mode=mode
 
-        training = mode == 'TRAIN'
-        testing = mode == 'TEST'
+        training=mode == 'TRAIN'
+        testing=mode == 'TEST'
 
         assert tag != None
 
         # handle most of the regularizers here
-        weights_regularizer = tf.contrib.layers.l2_regularizer(cfg.TRAIN.WEIGHT_DECAY)
+        weights_regularizer=tf.contrib.layers.l2_regularizer(cfg.TRAIN.WEIGHT_DECAY)
         if cfg.TRAIN.BIAS_DECAY:
-            biases_regularizer = weights_regularizer
+            biases_regularizer=weights_regularizer
         else:
-            biases_regularizer = tf.no_regularizer
+            biases_regularizer=tf.no_regularizer
 
         # list as many types of layers as possible, even if they are not used now
         with arg_scope([slim.conv2d, slim.conv2d_in_plane,
@@ -800,28 +829,28 @@ class Network(object):
                        weights_regularizer=weights_regularizer,
                        biases_regularizer=biases_regularizer,
                        biases_initializer=tf.constant_initializer(0.0)):
-            rois, cls_prob = self._build_network(training)
+            rois=self._build_network(training)
 
-        layers_to_output = {'rois': rois}
+        layers_to_output={'rois': rois}
 
         for var in tf.trainable_variables():
             self._train_summaries.append(var)
 
         if testing:
             # stds = np.tile(np.array(cfg.TRAIN.BBOX_NORMALIZE_STDS), (self._num_classes))
-            stds = np.array(cfg.TRAIN.BBOX_NORMALIZE_STDS)
+            stds=np.array(cfg.TRAIN.BBOX_NORMALIZE_STDS)
             # means = np.tile(np.array(cfg.TRAIN.BBOX_NORMALIZE_MEANS), (self._num_classes))
-            means = np.array(cfg.TRAIN.BBOX_NORMALIZE_MEANS)
-            self._predictions["bbox_pred"] *= stds
-            self._predictions["bbox_pred"] += means
+            means=np.array(cfg.TRAIN.BBOX_NORMALIZE_MEANS)
+            # self._predictions["bbox_pred"] *= stds
+            # self._predictions["bbox_pred"] += means
         else:
             self._add_losses()
             layers_to_output.update(self._losses)
 
-            val_summaries = []
+            val_summaries=[]
             with tf.device("/cpu:0"):
                 # val_summaries.append(self._add_gt_image_summary())
-                val_summaries.append(self._add_image_summary())
+                # val_summaries.append(self._add_image_summary())
                 for key, var in self._event_summaries.items():
                     val_summaries.append(tf.summary.scalar(key, var))
                 for key, var in self._score_summaries.items():
@@ -831,8 +860,8 @@ class Network(object):
                 for var in self._train_summaries:
                     self._add_train_summary(var)
 
-            self._summary_op = tf.summary.merge_all()
-            self._summary_op_val = tf.summary.merge(val_summaries)
+            self._summary_op=tf.summary.merge_all()
+            self._summary_op_val=tf.summary.merge(val_summaries)
 
         layers_to_output.update(self._predictions)
 
@@ -847,16 +876,16 @@ class Network(object):
     # Extract the head feature maps, for example for vgg16 it is conv5_3
     # only useful during testing mode
     def extract_head(self, sess, image):
-        feed_dict = {self._image: image}
-        feat = sess.run(self._layers["head"], feed_dict=feed_dict)
+        feed_dict={self._image: image}
+        feat=sess.run(self._layers["head"], feed_dict=feed_dict)
         return feat
 
     # only useful during testing mode
     def test_image(self, sess, image, im_info):
-        feed_dict = {self._image: image,
+        feed_dict={self._image: image,
                      self._im_info: im_info}
 
-        cls_score, cls_prob, bbox_pred, rois = sess.run([self._predictions["cls_score"],
+        cls_score, cls_prob, bbox_pred, rois=sess.run([self._predictions["cls_score"],
                                                          self._predictions['cls_prob'],
                                                          self._predictions['bbox_pred'],
                                                          self._predictions['rois']],
@@ -864,88 +893,75 @@ class Network(object):
         return cls_score, cls_prob, bbox_pred, rois
 
     def feed_image(self, sess, image, im_info):
-        feed_dict = {self._image: image,
+        feed_dict={self._image: image,
                      self._im_info: im_info}
-        fetch_list = [
+        fetch_list=[
             '%s/Prediction/lstm/cap_init_state:0' % self._scope,
-            '%s/Prediction/lstm/loc_init_state:0' % self._scope,
-            self._predictions['cls_prob'],
-            self._predictions['rois']]
-        if cfg.CONTEXT_FUSION:
-            feed_dict.update({self._global_roi: np.array([[0., 0., 0., im_info[1] - 1,
-                        im_info[0] - 1]], dtype=np.float32)})
-            fetch_list.append('%s/Prediction/lstm/gfeat_init_state:0' % self._scope)
+            self._sent_prob]
+        # if cfg.CONTEXT_FUSION:
+        #     feed_dict.update({self._global_roi: np.array([[0., 0., 0., im_info[1] - 1,
+        #                 im_info[0] - 1]], dtype=np.float32)})
+        #     fetch_list.append('%s/Prediction/lstm/gfeat_init_state:0' % self._scope)
 
-        fetch = sess.run(fetch_list, feed_dict=feed_dict)
+        fetch=sess.run(fetch_list, feed_dict=feed_dict)
 
         return fetch
 
-    def inference_step(self, sess, input_feed, cap_state_feed, loc_state_feed,
-                        gfeat_state_feed=None):
-        feed_dict = {'%s/Extraction/input_feed:0' % self._scope: input_feed,
-                     '%s/Prediction/lstm/cap_state_feed:0' % self._scope: cap_state_feed,
-                     '%s/Prediction/lstm/loc_state_feed:0' % self._scope: loc_state_feed}
-        fetch_list = ['%s/Prediction/lstm/cap_probs:0' % self._scope,
-                   self._predictions['bbox_pred'],
-                   '%s/Prediction/lstm/cap_state:0' % self._scope,
-                   '%s/Prediction/lstm/loc_state:0' % self._scope]
-        if cfg.CONTEXT_FUSION:
-            feed_dict.update({'%s/Prediction/lstm/gfeat_state_feed:0' % self._scope:
-                              gfeat_state_feed})
-            fetch_list.append('%s/Prediction/lstm/gfeat_state:0' % self._scope)
-        fetch = sess.run(fetches=fetch_list, feed_dict=feed_dict)
+    def inference_step(self, sess, input_feed, cap_state_feed):
+        feed_dict={'%s/Extraction/input_feed:0' % self._scope: input_feed,
+                     '%s/Prediction/lstm/cap_state_feed:0' % self._scope: cap_state_feed}
+        fetch_list=['%s/Prediction/lstm/cap_probs:0' % self._scope,
+                   '%s/Prediction/lstm/cap_state:0' % self._scope]
+                   # self._cap_state]
+        # if cfg.CONTEXT_FUSION:
+        #     feed_dict.update({'%s/Prediction/lstm/gfeat_state_feed:0' % self._scope:
+        #                       gfeat_state_feed})
+        #     fetch_list.append('%s/Prediction/lstm/gfeat_state:0' % self._scope)
+        fetch=sess.run(fetches=fetch_list, feed_dict=feed_dict)
 
         return fetch
 
     def get_summary(self, sess, blobs):
-        feed_dict = self._feed_dict(blobs)
+        feed_dict=self._feed_dict(blobs)
 
-        summary = sess.run(self._summary_op_val, feed_dict=feed_dict)
+        summary=sess.run(self._summary_op_val, feed_dict=feed_dict)
 
         return summary
 
     def train_step(self, sess, blobs, train_op):
-        feed_dict = self._feed_dict(blobs)
+        feed_dict=self._feed_dict(blobs)
+        sentence_loss, caption_loss, loss, \
+            _=sess.run([
+                               self._losses['sentence_loss'],
+                               self._losses['caption_loss'],
+                               self._losses['total_loss'],
+                               train_op],
+                              feed_dict=feed_dict)
 
-        rpn_loss_cls, rpn_loss_box, loss_cls, \
-            loss_box, caption_loss, loss, \
-            _ = sess.run([self._losses["rpn_cross_entropy"],
-                          self._losses['rpn_loss_box'],
-                          self._losses['clss_cross_entropy'],
-                          self._losses['loss_box'],
-                          self._losses['caption_loss'],
-                          self._losses['total_loss'],
-                          train_op],
-                         feed_dict=feed_dict)
-        return rpn_loss_cls, rpn_loss_box, loss_cls, \
-            loss_box, caption_loss, loss
+        return sentence_loss, caption_loss, loss
 
     def train_step_with_summary(self, sess, blobs, train_op):
-        feed_dict = self._feed_dict(blobs)
-        rpn_loss_cls, rpn_loss_box, loss_cls, \
-            loss_box, caption_loss, loss, \
-            summary, _ = sess.run([self._losses["rpn_cross_entropy"],
-                                   self._losses['rpn_loss_box'],
-                                   self._losses['clss_cross_entropy'],
-                                   self._losses['loss_box'],
-                                   self._losses['caption_loss'],
-                                   self._losses['total_loss'],
-                                   self._summary_op,
-                                   train_op],
-                                  feed_dict=feed_dict)
+        feed_dict=self._feed_dict(blobs)
+        sentence_loss, caption_loss, loss, \
+            summary, _=sess.run([
+                               self._losses['sentence_loss'],
+                               self._losses['caption_loss'],
+                               self._losses['total_loss'],
+                               self._summary_op,
+                               train_op],
+                              feed_dict=feed_dict)
 
-        return rpn_loss_cls, rpn_loss_box, loss_cls, \
-            loss_box, caption_loss, loss, summary
+        return sentence_loss, caption_loss, loss, summary
 
     def train_step_no_return(self, sess, blobs, train_op):
-        feed_dict = self._feed_dict(blobs)
+        feed_dict=self._feed_dict(blobs)
 
         sess.run([train_op], feed_dict=feed_dict)
 
     def _feed_dict(self, blobs):
-        feed_dict = {self._image: blobs['data'], self._im_info: blobs['im_info'],
+        feed_dict={self._image: blobs['data'], self._im_info: blobs['im_info'],
                      self._gt_boxes: blobs['gt_boxes'],
-                     self._gt_phrases: blobs['gt_phrases']}
+                     self._gt_ptokens: blobs['gt_ptokens']}
         if cfg.CONTEXT_FUSION:
             feed_dict.update({self._global_roi:
                 np.array([[0., 0., 0., blobs['im_info'][1] - 1,
