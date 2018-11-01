@@ -331,7 +331,11 @@ def sentence(vocab, vocab_indices):
 
 
 def test_im(sess, net, im_path, vocab, pre_results, vis=True):
-    im = cv2.imread(im_path)
+    if len(im_path)>200:
+        nparr = np.fromstring(im_path, np.uint8)
+        im = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    else:
+        im = cv2.imread(im_path)
     captions = im_detect(sess, net, im, None, use_box_at=-1)
     # pos_dets = np.hstack((boxes, scores[:, np.newaxis])) \
     #     .astype(np.float32, copy=False)
