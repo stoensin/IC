@@ -106,11 +106,11 @@ if __name__ == '__main__':
     else:
         raise ValueError("NO checkpoint found in {}".format(args.ckpt))
 
-    # set config
+
     tfconfig = tf.ConfigProto(allow_soft_placement=True)
     tfconfig.gpu_options.allow_growth = True
 
-    # init session
+
     saver = tf.train.Saver()
     with tf.Session(config=tfconfig) as sess:
         print('Restored from {}'.format(ckpt.model_checkpoint_path))

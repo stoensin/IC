@@ -28,7 +28,7 @@ def paragraph_layer(feature_vec):
     #* (cfg.IM2P.S_MAX - num_sentences + 1), dtype=np.int32)
     target_sentences = np.zeros((num_sentences, cfg.TIME_STEPS), dtype=np.float32)
     input_sentences = np.zeros((num_sentences, cfg.TIME_STEPS - 1), dtype=np.float32)
-    # add start token "1"
+    # start token "1"
     target_sentences[:, 0] = 1
     input_sentences[:, 0] = 1
     for i in xrange(num_sentences):

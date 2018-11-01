@@ -31,10 +31,8 @@ DEBUG = False
 
 def _get_image_blob(im):
     """Converts an image into a network input.
-
     Arguments:
         im (ndarray): a color image in BGR order
-
     Returns:
         blob (ndarray): a data blob holding an image pyramid
         im_scale_factors (list): list of image scales (relative to im) used
@@ -66,13 +64,12 @@ def _get_image_blob(im):
     return blob, np.array(im_scale_factors)
 
 
+# TODO: NO_RPN option, not used
 def _get_rois_blob(im_rois, im_scale_factors):
     """Converts RoIs into network inputs.
-
     Arguments:
         im_rois (ndarray): R x 4 matrix of RoIs in original image coordinates
         im_scale_factors (list): scale factors as returned by _get_image_blob
-
     Returns:
         blob (ndarray): R x 5 matrix of RoIs in the image pyramid
     """
@@ -81,13 +78,12 @@ def _get_rois_blob(im_rois, im_scale_factors):
     return rois_blob.astype(np.float32, copy=False)
 
 
+# TODO: NO_RPN option, not used
 def _project_im_rois(im_rois, scales):
     """Project image RoIs into the image pyramid built by _get_image_blob.
-
     Arguments:
         im_rois (ndarray): R x 4 matrix of RoIs in original image coordinates
         scales (list): scale factors as returned by _get_image_blob
-
     Returns:
         rois (ndarray): R x 4 matrix of projected RoI coordinates
         levels (list): image pyramid levels used by each projected RoI
@@ -115,11 +111,12 @@ def _get_blobs(im, rois):
     blobs = {'data': None, 'rois': None}
     blobs['data'], im_scale_factors = _get_image_blob(im)
 
-
+    # TODO: NO_RPN option, not used
     if not cfg.TEST.HAS_RPN:
         blobs['rois'] = _get_rois_blob(rois, im_scale_factors)
     return blobs, im_scale_factors
 
+# TODO: caffe version, not used
 
 
 def _greedy_search(embed_net, recurrent_net, forward_args, optional_args, proposal_n, max_timestep=15,
@@ -139,8 +136,8 @@ def _greedy_search(embed_net, recurrent_net, forward_args, optional_args, propos
     # reshape blobs
     for k, v in forward_args.iteritems():
         if DEBUG:
-            print ('shape of %s is ' % k)
-            print (v.shape)
+            print 'shape of %s is ' % k
+            print v.shape
         recurrent_net.blobs[k].reshape(*(v.shape))
 
     recurrent_net.forward(**forward_args)
@@ -190,7 +187,6 @@ def _greedy_search(embed_net, recurrent_net, forward_args, optional_args, propos
 
 def im_detect(sess, net, im, boxes=None, use_box_at=-1):
     """Detect object classes in an image given object proposals.
-
     Arguments:
         im (ndarray): color image to test (in BGR order)
         boxes (ndarray): R x 4 array of object proposals or None (for RPN)
@@ -202,8 +198,8 @@ def im_detect(sess, net, im, boxes=None, use_box_at=-1):
     """
 
     # for bbox unnormalization
-    bbox_mean = np.array(cfg.TRAIN.BBOX_NORMALIZE_MEANS).reshape((1, 4))
-    bbox_stds = np.array(cfg.TRAIN.BBOX_NORMALIZE_STDS).reshape((1, 4))
+    # bbox_mean = np.array(cfg.TRAIN.BBOX_NORMALIZE_MEANS).reshape((1, 4))
+    # bbox_stds = np.array(cfg.TRAIN.BBOX_NORMALIZE_STDS).reshape((1, 4))
 
     blobs, im_scales = _get_blobs(im, boxes)
     assert len(im_scales) == 1, "Only single-image batch implemented"
@@ -212,22 +208,26 @@ def im_detect(sess, net, im, boxes=None, use_box_at=-1):
         [[im_blob.shape[1], im_blob.shape[2], im_scales[0]]],
         dtype=np.float32)
 
-    if cfg.TEST.USE_BEAM_SEARCH:
-        scores, box_offsets, captions, boxes = beam_search(sess, net, blobs, im_scales)
-    else:
-        scores, box_offsets, captions, boxes = greedy_search(sess, net, blobs, im_scales)
+    # if cfg.TEST.USE_BEAM_SEARCH:
+    #     scores, box_offsets, captions, boxes = beam_search(sess, net, blobs, im_scales)
+    # else:
+    #     scores, box_offsets, captions, boxes = greedy_search(sess, net, blobs, im_scales)
+    captions = greedy_search(sess, net, blobs, im_scales)
 
     # bbox target unnormalization
-    box_deltas = box_offsets * bbox_stds + bbox_mean
+    # box_deltas = box_offsets * bbox_stds + bbox_mean
 
     # do the transformation
-    pred_boxes = bbox_transform_inv(boxes, box_deltas)
-    pred_boxes = clip_boxes(pred_boxes, im.shape)
+    # pred_boxes = bbox_transform_inv(boxes, box_deltas)
+    # pred_boxes = clip_boxes(pred_boxes, im.shape)
 
-    return scores[:, 1], pred_boxes, captions
+    # return scores[:, 1], pred_boxes, captions
+    return captions
 
 
 def greedy_search(sess, net, blobs, im_scales):
+    # (TODO wu) for now it only works with "concat" mode
+
     # get initial states and rois
     if cfg.CONTEXT_FUSION:
         cap_state, loc_state, scores, \
@@ -235,20 +235,22 @@ def greedy_search(sess, net, blobs, im_scales):
                                                blobs['data'],
                                                blobs['im_info'][0])
     else:
-        cap_state, loc_state, scores, rois = net.feed_image(sess, blobs['data'],
-                                                            blobs['im_info'][0])
+        cap_state, sent_prob = net.feed_image(sess, blobs['data'],
+                                              blobs['im_info'][0])
+    num_layer = cfg.IM2P.NUM_WORD_RNN_LAYERS
 
+    print("sent_prob", sent_prob)
     # proposal boxes
-    boxes = rois[:, 1:5] / im_scales[0]
-    proposal_n = rois.shape[0]
+    # boxes = rois[:, 1:5] / im_scales[0]
+    # proposal_n = rois.shape[0]
 
-    cap_probs = np.ones((proposal_n, 1), dtype=np.int32)
+    cap_probs = np.ones((cfg.IM2P.S_MAX, 1), dtype=np.int32)
     # index of <EOS> in vocab
     end_idx = cfg.VOCAB_END_ID
     # captions = np.empty([proposal_n, 1], dtype=np.int32)
-    bbox_offsets_list = []
-    box_offsets = np.zeros((proposal_n, 4), dtype=np.float32)
-    bbox_pred = np.zeros((proposal_n, 4), dtype=np.float32)
+    # bbox_offsets_list = []
+    # box_offsets = np.zeros((proposal_n, 4), dtype=np.float32)
+    # bbox_pred = np.zeros((proposal_n, 4), dtype=np.float32)
     for i in xrange(cfg.TIME_STEPS - 1):
         # dim: [proposal_n, ]
         input_feed = np.argmax(cap_probs, axis=1)
@@ -260,21 +262,34 @@ def greedy_search(sess, net, blobs, im_scales):
         end_ids = np.where(input_feed == end_idx)[0]
         # prepare for seq length in dynamic rnn
         input_feed[end_ids] = 0
-        box_offsets[end_ids] = bbox_pred[end_ids]
-        if cfg.CONTEXT_FUSION:
-            cap_probs, bbox_pred, cap_state, loc_state, \
-                gfeat_state = net.inference_step(sess, input_feed,
-                                                 cap_state, loc_state, gfeat_state)
-        else:
-            cap_probs, bbox_pred, cap_state, \
-                loc_state = net.inference_step(sess, input_feed,
-                                               cap_state, loc_state)
-        bbox_offsets_list.append(bbox_pred)
+        # box_offsets[end_ids] = bbox_pred[end_ids]
+        # if cfg.CONTEXT_FUSION:
+        #     cap_probs, bbox_pred, cap_state, loc_state, \
+        #         gfeat_state = net.inference_step(sess, input_feed,
+        #                                          cap_state, loc_state, gfeat_state)
+        # else:
+        # cap_state = np.reshape(cap_state,
+                               # [2 * num_layer, -1, cfg.EMBED_DIM])
+        # cap_state = np.reshape(np.transpose(cap_state, [1, 0, 2]), [-1, 2 * num_layer * cfg.EMBED_DIM])
+        # print("shape", cap_state.shape)
+        cap_probs, cap_state = net.inference_step(sess, input_feed,
+                                                  cap_state)
+        # bbox_offsets_list.append(bbox_pred)
 
-    return scores, box_offsets, captions, boxes
+    print(captions)
+    # return scores, box_offsets, captions, boxes
+    sent_prob = np.reshape(sent_prob[:, 1], [-1])
+    keep = 0
+    for i in sent_prob:
+        keep += 1
+        if i > 0.5:
+            break
+    assert keep <= cfg.IM2P.S_MAX
+
+    return captions[:keep, :]
 
 
-def vis_detections(im_path, im, captions, dets, thresh=0.5, save_path='vis'):
+def vis_detections(im_path, im, paragraph, thresh=0.5, save_path='vis'):
     """Visual debugging of detections by saving images with detected bboxes."""
     # add html generation for better visualization
     print('visualizing ...')
@@ -282,20 +297,22 @@ def vis_detections(im_path, im, captions, dets, thresh=0.5, save_path='vis'):
         os.makedirs(save_path + '/images')
     im_name = im_path.split('/')[-1][:-4]
     page = open(os.path.join(save_path, im_name + '.html'), 'w')
-    page.write('<hr><h2>Dense caption results for image %s</h2>' % im_name)
-    for i in xrange(dets.shape[0]):
-        bbox = dets[i, :4]
-        score = dets[i, -1]
-        caption = captions[i]
-        if score > thresh:
-            im_new = np.copy(im)
+    page.write('<hr><h2>IM2P results for image %s</h2>' % im_name)
+    # for i in xrange(dets.shape[0]):
+    #     bbox = dets[i, :4]
+    #     score = dets[i, -1]
+    #     caption = captions[i]
+    #     if score > thresh:
+    #         im_new = np.copy(im)
 
-            cv2.rectangle(im_new, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)
-            im_rel_path = 'images/%s_%d.jpg' % (im_name, i)
-            cv2.imwrite('%s/%s' % (save_path, im_rel_path), im_new)
-            page.write('<div style=\'border: 2px solid; width:166px; height:360px; display:inline-table\'>')
-            page.write('<image width="260" height = "260" src=\'%s\'></image><br> <hr><label> %s </label></div>' % (
-                im_rel_path, caption))
+    #         cv2.rectangle(im_new, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)
+    #         im_rel_path = 'images/%s_%d.jpg' % (im_name, i)
+    #         cv2.imwrite('%s/%s' % (save_path, im_rel_path), im_new)
+    #         page.write('<div style=\'border: 2px solid; width:166px; height:360px; display:inline-table\'>')
+    im_rel_path = 'images/%s.jpg' % (im_name)
+    cv2.imwrite('%s/%s' % (save_path, im_rel_path), im)
+    page.write('<image width="260" height = "260" src=\'%s\'></image><br> <hr><label> %s </label></div>' % (
+        im_rel_path, paragraph))
     page.write('<hr>')
     page.close()
 
@@ -313,60 +330,32 @@ def sentence(vocab, vocab_indices):
     return sentence
 
 
-def test_im(sess, net, img_data, vocab, pre_results, vis=True):
-    if len(img_data)>200:
-        nparr = np.fromstring(img_data, np.uint8)
-        im = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    else:
-        im = cv2.imread(img_data)
-    scores, boxes, captions = im_detect(sess, net, im, None, use_box_at=-1)
-    pos_dets = np.hstack((boxes, scores[:, np.newaxis])) \
-        .astype(np.float32, copy=False)
-    keep = nms(pos_dets, cfg.TEST.NMS)
-    pos_dets = pos_dets[keep, :]
-    pos_scores = scores[keep]
-    pos_captions = [sentence(vocab, captions[idx]) for idx in keep]
-    pos_boxes = boxes[keep, :]
+def test_im(sess, net, im_path, vocab, pre_results, vis=True):
+    im = cv2.imread(im_path)
+    captions = im_detect(sess, net, im, None, use_box_at=-1)
+    # pos_dets = np.hstack((boxes, scores[:, np.newaxis])) \
+    #     .astype(np.float32, copy=False)
+    # keep = nms(pos_dets, cfg.TEST.NMS)
+    # pos_dets = pos_dets[keep, :]
+    # pos_scores = scores[keep]
+    pos_captions = []
+    for cap in captions:
+        pos_captions.append(sentence(vocab, cap))
+    paragraph = '. '.join(pos_captions)
+    # pos_captions = [sentence(vocab, captions[idx]) for idx in keep]
+    # pos_boxes = boxes[keep, :]
     if vis:
-        vis_detections(img_data, im, pos_captions, pos_dets, save_path='./demo')
-        results = vis_whtml(img_data, im, pos_captions, pos_dets, pre_results)
+        vis_detections(im_path, im, paragraph, save_path='./demo')
+        # results = vis_whtml(im_path, im, pos_captions, pos_dets, pre_results)
 
-    return results
-
-def predict(sess, net, img_data, vocab, pre_results, vis=True):
-    if len(img_data)>200:
-        nparr = np.fromstring(img_data, np.uint8)
-        im = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    else:
-        im = cv2.imread(img_data)
-    scores, boxes, captions = im_detect(sess, net, im, None, use_box_at=-1)
-    pos_dets = np.hstack((boxes, scores[:, np.newaxis])) \
-        .astype(np.float32, copy=False)
-    keep = nms(pos_dets, cfg.TEST.NMS)
-    pos_dets = pos_dets[keep, :]
-    pos_scores = scores[keep]
-    pos_captions = [sentence(vocab, captions[idx]) for idx in keep]
-    pos_boxes = boxes[keep, :]
-
-    results=[]
-    num=0
-    for i, score in enumerate(pos_scores):
-        if i ==0:
-            continue
-        if i % 6 ==0:
-            pstr = pos_captions[i-6],pos_captions[i-5],pos_captions[i-4],pos_captions[i-3],pos_captions[i-2],pos_captions[i-1],pos_captions[i]
-            scores= pos_scores[i-6] + pos_scores[i-5]+pos_scores[i-4] + pos_scores[i-3]+pos_scores[i-2] + pos_scores[i-1]+ pos_scores[i]
-            results.append((num, pstr,scores))
-            num = num + 1
-
-    return results
+    # return results
 
 
 def test_net(sess, net, imdb, vis=True, use_box_at=-1):
     """Test a Fast R-CNN network on an image database."""
     num_images = len(imdb.image_index)
     if DEBUG:
-        print ('number of images: %d' % num_images)
+        print 'number of images: %d' % num_images
     # all detections are collected into:
     #    all_regions[image] = list of {'image_id', caption', 'location', 'location_seq'}
     all_regions = [None] * num_images
