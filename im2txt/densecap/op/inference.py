@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument('--cfg', dest='cfg_file',
                         help='optional config file',
                         default=None, type=str)
+    # TODO: add inception
     parser.add_argument('--net', dest='net',
                         help='vgg16, res50, res101, res152',
                         default='res50', type=str)
@@ -104,11 +105,8 @@ if __name__ == '__main__':
         print('Restored from {}'.format(ckpt.model_checkpoint_path))
         saver.restore(sess, ckpt.model_checkpoint_path)
 
-        # for html visualization
+        
         pre_results = {}
         save_path = './vis/data'
         for path in im_paths:
-            pre_results = test_im(sess, net, path, vocab, pre_results)
-
-        with open(save_path + '/results.json', 'w') as f:
-            json.dump(pre_results, f)
+            test_im(sess, net, path, vocab, pre_results)

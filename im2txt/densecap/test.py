@@ -348,8 +348,9 @@ def test_im(sess, net, im_path, vocab, pre_results, vis=True):
     paragraph = '. '.join(pos_captions)
     # pos_captions = [sentence(vocab, captions[idx]) for idx in keep]
     # pos_boxes = boxes[keep, :]
-    if vis:
-        vis_detections(im_path, im, paragraph, save_path='./demo')
+    print(paragraph)
+    # if vis:
+        # vis_detections(im_path, im, paragraph, save_path='./demo')
         # results = vis_whtml(im_path, im, pos_captions, pos_dets, pre_results)
 
     # return results
