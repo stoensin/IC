@@ -17,6 +17,7 @@ VOCAB_FILE = './assets/word_counts.txt'
 
 class ModelWrapper(object):
     """Model wrapper for TensorFlow models in SavedModel format"""
+
     def __init__(self):
 
         g = tf.Graph()

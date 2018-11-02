@@ -44,7 +44,7 @@ class Network(object):
         if cfg.CONTEXT_FUSION:
             self._global_roi = tf.placeholder(tf.float32, shape=[1, 5])
         self._gt_boxes = tf.placeholder(tf.float32, shape=[None, 5])
-        
+
         self._gt_phrases = tf.placeholder(tf.int32, shape=[None, cfg.MAX_WORDS])
 
         self._anchor_scales = cfg.ANCHOR_SCALES
@@ -439,21 +439,6 @@ class Network(object):
                     else:
                         raise NotImplementedError
 
-                # OUT OF MEMORY ON GPU
-                # inv_embedding = tf.tile(tf.expand_dims(tf.transpose(self._embedding),
-                #                                        [0]),
-                #                         [tf.shape(caption_outputs)[0], 1, 1])
-                # predict_caption = tf.matmul(caption_outputs, inv_embedding)
-
-                # cap_logits = tf.matmul(tf.reshape(cap_outputs, [-1, cfg.EMBED_DIM]),
-                                       # tf.transpose(self._embedding))
-                # cap_logits = tf.reshape(predict_cap_reshape,
-                #                         [-1, cfg.TIME_STEPS, cfg.VOCAB_SIZE + 3])
-
-                # problematic to always slice output of the last slice
-                # loc_out_slice = tf.slice(loc_outputs, [0, cfg.TIME_STEPS - 1, 0], [-1, 1, -1])
-                # loc_out_slice = tf.squeeze(loc_out_slice, [1])
-                # BETTER SOLUTION
                 cont_bbox = tf.expand_dims(self._sentence_data['cont_bbox'], axis=2)
                 loc_out_slice = tf.reduce_sum(loc_outputs * cont_bbox, axis=1)
 
