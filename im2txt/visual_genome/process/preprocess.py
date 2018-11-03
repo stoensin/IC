@@ -21,8 +21,8 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Preprocessing visual genome')
 parser.add_argument('--version', dest='version', type=float, default=1.2, help='the version of visual genome dataset.')
-parser.add_argument('--path', dest='path', type=str, default='/home/ICR/im2txt/visual_genome/VG', help='directory saving the raw dataset')
-parser.add_argument('--output_dir', dest='output_dir', type=str, default='/home/ICR/visual_genome/data', help='output directory of data files')
+parser.add_argument('--path', dest='path', type=str, default='/content/im2txt/visual_genome/VG', help='directory saving the raw dataset')
+parser.add_argument('--output_dir', dest='output_dir', type=str, default='/content/visual_genome/data', help='output directory of data files')
 parser.add_argument('--max_words', dest='max_words', type=int, default=10, help='maximum length of words for training.')
 args = parser.parse_args()
 

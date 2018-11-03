@@ -20,7 +20,7 @@ except ImportError:
     import queue
 
 define("port", default=1688, help="the port of app server")
-define("model_server", default="http://127.0.0.1:5200", help="the ImageCaption Model Server")
+# define("model_server", default="http://127.0.0.1:5200", help="the Image Caption Model Server")
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"), format='[%(asctime)s] %(levelname)s: %(message)s', datefmt='%m/%d/%y %H:%M:%S')
 
@@ -30,6 +30,8 @@ image_captions = collections.OrderedDict()
 VALID_EXT = ['.png', '.jpg', '.jpeg']
 error_raised = []
 app_cookie = 'ICR' + str(uuid.uuid4())
+model_server='http://127.0.0.1:5201'
+
 
 """
 RequestHandler definition

@@ -23,17 +23,17 @@ case $DATASET in
     TRAIN_IMDB="vg_1.0_train"
     TEST_IMDB="vg_1.0_val"
     PT_DIR="dense_cap"
-    FINETUNE_AFTER1=200000
-    FINETUNE_AFTER2=100000
-    ITERS1=400000
-    ITERS2=300000
+    FINETUNE_AFTER1=20000
+    FINETUNE_AFTER2=10000
+    ITERS1=40000
+    ITERS2=30000
     ;;
   visual_genome_1.2)
     TRAIN_IMDB="vg_1.2_train"
     TEST_IMDB="vg_1.2_val"
     PT_DIR="dense_cap"
-    FINETUNE_AFTER1=200000
-    FINETUNE_AFTER2=100000
+    FINETUNE_AFTER1=20000
+    FINETUNE_AFTER2=10000
     ITERS1=400000
     ITERS2=300000
     ;;
@@ -57,7 +57,7 @@ time python densecap/op/train_net.py \
     --imdb ${TRAIN_IMDB} \
     --imdbval ${TEST_IMDB} \
     --iters ${FINETUNE_AFTER1}\
-    --cfg scripts/dense_cap_config.yml \
+    --cfg densecap/scripts/dense_cap_config.yml \
     --data_dir ${data_dir} \
     --net ${NET} \
     --set EXP_DIR dc_conv_fixed CONTEXT_FUSION False RESNET.FIXED_BLOCKS 3
@@ -72,7 +72,7 @@ time python densecap/op/train_net.py \
     --imdb ${TRAIN_IMDB} \
     --iters `expr ${ITERS1} - ${FINETUNE_AFTER1}` \
     --imdbval ${TEST_IMDB} \
-    --cfg scripts/dense_cap_config.yml \
+    --cfg densecap/scripts/dense_cap_config.yml \
     --data_dir ${data_dir} \
     --net ${NET} \
     --set EXP_DIR dc_tune_conv CONTEXT_FUSION False RESNET.FIXED_BLOCKS 1 TRAIN.LEARNING_RATE 0.00025
@@ -87,7 +87,7 @@ time python densecap/op/train_net.py \
     --imdb ${TRAIN_IMDB} \
     --imdbval ${TEST_IMDB} \
     --iters ${FINETUNE_AFTER2} \
-    --cfg scripts/dense_cap_config.yml \
+    --cfg densecap/scripts/dense_cap_config.yml \
     --data_dir ${data_dir} \
     --net ${NET} \
     --set EXP_DIR dc_context CONTEXT_FUSION True RESNET.FIXED_BLOCKS 3 TRAIN.LEARNING_RATE 0.000125
@@ -102,7 +102,7 @@ time python densecap/op/train_net.py \
     --imdb ${TRAIN_IMDB} \
     --imdbval ${TEST_IMDB} \
     --iters `expr ${ITERS2} - ${FINETUNE_AFTER2}` \
-    --cfg scripts/dense_cap_config.yml \
+    --cfg densecap/scripts/dense_cap_config.yml \
     --data_dir ${data_dir} \
     --net ${NET} \
     --set EXP_DIR dc_tune_context CONTEXT_FUSION True RESNET.FIXED_BLOCKS 1 TRAIN.LEARNING_RATE 0.0000625

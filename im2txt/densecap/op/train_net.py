@@ -2,21 +2,24 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import pprint
 import sys
 sys.path.append('../')
 
-import six
-import argparse
-import numpy as np
 import tensorflow as tf
-
+import numpy as np
+import argparse
+import six
 from im2txt.densecap.config import cfg, cfg_from_file, cfg_from_list, get_output_dir, get_output_tb_dir
-from im2txt.faster_rcnn.datasets.factory import get_imdb
-import im2txt.faster_rcnn.datasets.imdb
-from im2txt.densecap.train import get_training_roidb, train_net
-from im2txt.densecap.network.vgg16 import vgg16
 from im2txt.densecap.network.resnet_v1 import resnetv1
-import pprint
+from im2txt.densecap.network.vgg16 import vgg16
+from im2txt.densecap.train import get_training_roidb, train_net
+import im2txt.faster_rcnn.datasets.imdb
+from im2txt.faster_rcnn.datasets.factory import get_imdb
+
+
+
+
 
 
 def parse_args():
@@ -54,10 +57,11 @@ def parse_args():
                         help='vgg16, res50, res101, res152',
                         default=None, type=str)
     parser.add_argument('--data_dir', dest='data_dir', type=str,
-                        default='/home/joe/git/visual_genome', help='dataset directory')
+                        default='/content/output/visual_genome', help='dataset directory')
     parser.add_argument('--embed_dim', dest='embed_dim', type=int,
                         default=512, help='embed dimension of words')
-    parser.add_argument('--context_fusion', dest='context_fusion', action='store_true', help='train with context fusion.')
+    parser.add_argument('--context_fusion', dest='context_fusion',
+                        action='store_true', help='train with context fusion.')
     parser.add_argument('--set', dest='set_cfgs',
                         help='set config keys', default=None,
                         nargs=argparse.REMAINDER)
@@ -91,12 +95,10 @@ def combined_roidb(imdb_names):
     return imdb, roidb
 
 
-
 def main():
     args = parse_args()
     cfg.DATA_DIR = args.data_dir
     cfg.CONTEXT_FUSION = args.context_fusion
-
 
     print('------ called with args: -------')
     pprint.pprint(args)
@@ -120,7 +122,6 @@ def main():
         tf.set_random_seed(cfg.RNG_SEED)
 
     imdb, roidb = combined_roidb(args.imdb_name)
-
 
     output_dir = get_output_dir(imdb, args.tag)
     print("output will be saved to `{:s}`".format(output_dir))

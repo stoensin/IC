@@ -26,12 +26,11 @@ import pprint
 
 
 
-CKPT= '../ckpt'
-CFG = 'scripts/dense_cap_config.yml'
+CKPT= '../backendApi/assets/ckpt'
+CFG = '../im2txt/densecap/dense_cap_config.yml'
 NET = 'res50'
-VOCAB_FILE= '../ckpt/vocabulary.txt'
+VOCAB_FILE= '../im2txt/densecap/ckpt/vocabulary.txt'
 SET=  ['TEST.USE_BEAM_SEARCH', 'False', 'EMBED_DIM', '512', 'TEST.LN_FACTOR', '1.', 'TEST.RPN_NMS_THRESH', '0.7', 'TEST.NMS', '0.3']
-
 
 class ModelWrapper(object):
     """Model wrapper for TensorFlow models in SavedModel format"""
