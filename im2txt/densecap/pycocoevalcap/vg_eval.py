@@ -9,7 +9,8 @@ import numpy as np
 import pprint
 import time
 #from bleu.bleu import Bleu
-import meteor as Meteor
+# import meteor as Meteor
+from meteor.meteor import Meteor
 #from rouge.rouge import Rouge
 #from cider.cider import Cider
 #import nltk
