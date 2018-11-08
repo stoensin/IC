@@ -38,15 +38,8 @@
 
 > After this command will write results into the folder vis/data. We have provided a web-based visualizer to view these results; to use it, change to the vis directory and start a local HTTP server:
 
-```
-cd vis
-python -m http.server 8181
-```
+> cd vis
+
+> python -m http.server 8181
+
 Then point your web browser to http://localhost:8181/view_results.html.
-
-
-
-## References
-* Dense captioning with joint inference and visual context [densecap](https://github.com/linjieyangsc/densecap)
-* Adapted web-based visualizer from [jcjohnson](https://github.com/jcjohnson)'s [densecap repo](https://github.com/jcjohnson/densecap)
-* The Faster-RCNN framework inherited from repo [tf-faster-rcnn](https://github.com/endernewton/tf-faster-rcnn) by [endernewton](https://github.com/endernewton)
