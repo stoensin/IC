@@ -6,7 +6,6 @@ from __future__ import print_function
 
 from os.path import join as pjoin
 import sys
-sys.path.append('../')
 import six
 import glob
 import argparse
@@ -14,13 +13,12 @@ import json
 import numpy as np
 import tensorflow as tf
 
-from im2txt.densecap.config import cfg, cfg_from_file, cfg_from_list, get_output_dir, get_output_tb_dir
-from im2txt.faster_rcnn.datasets.factory import get_imdb
-import im2txt.faster_rcnn.datasets.imdb
-from im2txt.densecap.train import get_training_roidb, train_net
-from im2txt.densecap.test import test_im
-from im2txt.densecap.network.vgg16 import vgg16
-from im2txt.densecap.network.resnet_v1 import resnetv1
+from .config import cfg, cfg_from_file, cfg_from_list, get_output_dir, get_output_tb_dir
+from .datasets.factory import get_imdb
+import .datasets.imdb
+from .train import get_training_roidb, train_net
+from .test import test_im
+from .network.resnet_v1 import resnetv1
 import pprint
 
 
@@ -67,9 +65,7 @@ if __name__ == '__main__':
         cfg_from_list(args.set_cfgs)
 
     # load network
-    if args.net == 'vgg16':
-        net = vgg16()
-    elif args.net == 'res50':
+    if args.net == 'res50':
         net = resnetv1(num_layers=50)
     elif args.net == 'res101':
         net = resnetv1(num_layers=101)

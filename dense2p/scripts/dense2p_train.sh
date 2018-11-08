@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Run with:
-#       bash scripts/dense_cap_train.sh [dataset] [net] [ckpt_to_init] [data_dir] [step]
+#       bash scripts/dense2p_train.sh [dataset] [net] [ckpt_to_init] [data_dir] [step]
 
 set -x
 set -e
@@ -50,7 +50,7 @@ time python ../train_net.py \
     --imdb ${TRAIN_IMDB} \
     --imdbval ${TEST_IMDB} \
     --iters ${FINETUNE_AFTER}\
-    --cfg ../scripts/dense_cap_config.yml \
+    --cfg ../scripts/dense2p_config.yml \
     --data_dir ${data_dir} \
     --net ${NET} \
     --set EXP_DIR im2p_fixed IM2P.FINETUNE False
@@ -65,7 +65,7 @@ time python ../train_net.py \
     --imdb ${TRAIN_IMDB} \
     --iters `expr ${ITERS} - ${FINETUNE_AFTER}` \
     --imdbval ${TEST_IMDB} \
-    --cfg ../scripts/dense_cap_config.yml \
+    --cfg ../scripts/dense2p_config.yml \
     --data_dir ${data_dir} \
     --net ${NET} \
     --set EXP_DIR im2p_finetune RESNET.FIXED_BLOCKS 1 IM2P.FINETUNE True

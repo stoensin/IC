@@ -74,7 +74,7 @@ _C = config     # short alias to avoid coding
 # mode flags ---------------------
 _C.TRAINER = 'replicated'  # options: 'horovod', 'replicated'
 _C.MODE_MASK = True        # FasterRCNN or MaskRCNN
-_C.MODE_FPN = False
+_C.MODE_FPN = True
 
 # dataset -----------------------
 _C.DATA.BASEDIR = '/path/to/your/COCO/DIR'
@@ -169,7 +169,7 @@ _C.FPN.NORM = 'None'  # 'None', 'GN'
 _C.FPN.FRCNN_HEAD_FUNC = 'fastrcnn_2fc_head'
 # choices: fastrcnn_2fc_head, fastrcnn_4conv1fc_{,gn_}head
 _C.FPN.FRCNN_CONV_HEAD_DIM = 256
-_C.FPN.FRCNN_FC_HEAD_DIM = 1024
+_C.FPN.FRCNN_FC_HEAD_DIM = 4096  # 1024
 _C.FPN.MRCNN_HEAD_FUNC = 'maskrcnn_up4conv_head'   # choices: maskrcnn_up4conv_{,gn_}head
 
 # Mask-RCNN

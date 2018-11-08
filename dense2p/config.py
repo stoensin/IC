@@ -2,8 +2,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-""" config system for Densecap
-THis file specifies default config for Densecap. One can change the value of the file by
+"""
+THis file specifies default config for Dense2p. One can change the value of the file by
 writing a config file(in yaml) and use cfg_from_file(yaml_file) to load and override the
 default options.
 """
@@ -123,7 +123,7 @@ __C.TRAIN.BBOX_NORMALIZE_STDS = (0.1, 0.1, 0.2, 0.2)
 
 # solver.prototxt specifies the snapshot path prefix, this adds an optional
 # infix to yield the path: <prefix>[_<infix>]_iters_XYZ.caffemodel
-__C.TRAIN.SNAPSHOT_PREFIX = 'res50_densecap'
+__C.TRAIN.SNAPSHOT_PREFIX = 'resnet_dense2p'
 
 # Weight decay, for regularization
 __C.TRAIN.WEIGHT_DECAY = 0.0001

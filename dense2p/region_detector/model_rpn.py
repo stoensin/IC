@@ -8,8 +8,8 @@ from tensorpack.tfutils.argscope import argscope
 from tensorpack.tfutils.scope_utils import under_name_scope, auto_reuse_variable_scope
 from tensorpack.models import Conv2D, layer_register
 
-from model_box import clip_boxes
-from config import config as cfg
+from .model_box import clip_boxes
+from .config import config as cfg
 
 
 @layer_register(log_shape=True)

@@ -13,13 +13,13 @@ from tensorpack.dataflow import (
 from tensorpack.utils import logger
 # import tensorpack.utils.viz as tpviz
 
-from coco import COCODetection
-from utils.generate_anchors import generate_anchors
-from utils.np_box_ops import area as np_area
-from common import (
+from .coco import COCODetection
+from .utils.generate_anchors import generate_anchors
+from .utils.np_box_ops import area as np_area
+from .common import (
     DataFromListOfDict, CustomResize, filter_boxes_inside_shape,
     box_to_point8, point8_to_box, segmentation_to_mask)
-from config import config as cfg
+from .config import config as cfg
 
 try:
     import pycocotools.mask as cocomask
@@ -39,7 +39,7 @@ try:
         return ret.astype('float32')
 
 except ImportError:
-    from utils.np_box_ops import iou as np_iou
+    from .utils.np_box_ops import iou as np_iou
 
 
 class MalformedData(BaseException):

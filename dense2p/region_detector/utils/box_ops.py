@@ -7,6 +7,14 @@ from tensorpack.tfutils.scope_utils import under_name_scope
 """
 This file is modified from
 https://github.com/tensorflow/models/blob/master/object_detection/core/box_list_ops.py
+
+Bounding Box List operations.
+Example box operations that are supported:
+  * areas: compute bounding box areas
+  * iou: pairwise intersection-over-union scores
+  * sq_dist: pairwise distances between bounding boxes
+Whenever box_list_ops functions output a BoxList, the fields of the incoming
+BoxList are retained unless documented otherwise.
 """
 
 

@@ -10,10 +10,10 @@ from tensorpack.models import (
     Conv2D, FullyConnected, layer_register)
 from tensorpack.utils.argtools import memoized_method
 
-from basemodel import GroupNorm
-from utils.box_ops import pairwise_iou
-from model_box import encode_bbox_target, decode_bbox_target
-from config import config as cfg
+from .basemodel import GroupNorm
+from .utils.box_ops import pairwise_iou
+from .model_box import encode_bbox_target, decode_bbox_target
+from .config import config as cfg
 
 
 @under_name_scope()

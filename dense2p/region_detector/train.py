@@ -26,34 +26,34 @@ from tensorpack.tfutils import optimizer
 from tensorpack.tfutils.common import get_tf_version_tuple
 import tensorpack.utils.viz as tpviz
 
-from coco import COCODetection
-from basemodel import (
+from .coco import COCODetection
+from .basemodel import (
     image_preprocess, resnet_c4_backbone, resnet_conv5,
     resnet_fpn_backbone)
 
-import model_frcnn
-import model_mrcnn
-from model_frcnn import (
+import .model_frcnn
+import .model_mrcnn
+from .model_frcnn import (
     sample_fast_rcnn_targets, fastrcnn_outputs,
     fastrcnn_predictions, BoxProposals, FastRCNNHead)
-from model_mrcnn import maskrcnn_upXconv_head, maskrcnn_loss
-from model_rpn import rpn_head, rpn_losses, generate_rpn_proposals
-from model_fpn import (
+from .model_mrcnn import maskrcnn_upXconv_head, maskrcnn_loss
+from .model_rpn import rpn_head, rpn_losses, generate_rpn_proposals
+from .model_fpn import (
     fpn_model, multilevel_roi_align,
     multilevel_rpn_losses, generate_fpn_proposals)
-from model_cascade import CascadeRCNNHead
-from model_box import (
+from .model_cascade import CascadeRCNNHead
+from .model_box import (
     clip_boxes, crop_and_resize, roi_align, RPNAnchors)
 
-from data import (
+from .data import (
     get_train_dataflow, get_eval_dataflow,
     get_all_anchors, get_all_anchors_fpn)
-from viz import (
+from .viz import (
     draw_annotation, draw_proposal_recall,
     draw_predictions, draw_final_outputs)
-from eval import (
+from .eval import (
     eval_coco, detect_one_image, print_evaluation_scores, DetectionResult)
-from config import finalize_configs, config as cfg
+from .config import finalize_configs, config as cfg
 
 
 class DetectionModel(ModelDesc):

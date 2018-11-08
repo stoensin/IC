@@ -2,9 +2,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import sys
-sys.path.append('../')
-
 from .config import cfg
 import im2txt.faster_rcnn.roi_data_layer.roidb as rdl_roidb
 from im2txt.faster_rcnn.roi_data_layer.layer import RoIDataLayer
@@ -42,7 +39,7 @@ class SolverWrapper(object):
         if not os.path.exists(self.tbvaldir):
             os.makedirs(self.tbvaldir)
 
-        
+
 
     def snapshot(self, sess, iters=0):
         """Take a snapshot of the network after unnormalizing the learned

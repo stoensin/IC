@@ -19,5 +19,5 @@ echo Logging output to "$LOG"
 time python ../test_net.py  \
   --ckpt ${ckpt} \
   --imdb ${TEST_IMDB} \
-  --cfg densecap/scripts/dense_cap_config.yml \
+  --cfg densecap/scripts/dense2p_config.yml \
   --set ALL_TEST True

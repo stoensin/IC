@@ -1,4 +1,3 @@
-
 """Factory method for easily getting imdbs by name."""
 
 __sets = {}

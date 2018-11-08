@@ -11,11 +11,11 @@ from tensorpack.tfutils.scope_utils import under_name_scope
 from tensorpack.models import (
     Conv2D, layer_register, FixedUnPooling, MaxPooling)
 
-from model_rpn import rpn_losses, generate_rpn_proposals
-from model_box import roi_align
-from utils.box_ops import area as tf_area
-from config import config as cfg
-from basemodel import GroupNorm
+from .model_rpn import rpn_losses, generate_rpn_proposals
+from .model_box import roi_align
+from .utils.box_ops import area as tf_area
+from .config import config as cfg
+from .basemodel import GroupNorm
 
 
 @layer_register(log_shape=True)

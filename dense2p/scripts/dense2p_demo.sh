@@ -13,6 +13,6 @@ fi
 
 time python ../inference.py \
       --ckpt ${ckpt} \
-      --cfg  ../scripts/dense_cap_config.yml \
+      --cfg  ../scripts/dense2p_config.yml \
       --vocab ${vocab} \
       --set TEST.USE_BEAM_SEARCH False EMBED_DIM 512

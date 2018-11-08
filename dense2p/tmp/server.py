@@ -27,7 +27,7 @@ import pprint
 
 
 CKPT= '../ckpt'
-CFG = 'scripts/dense_cap_config.yml'
+CFG = 'scripts/dense2p_config.yml'
 NET = 'res50'
 VOCAB_FILE= '../ckpt/vocabulary.txt'
 SET=  ['TEST.USE_BEAM_SEARCH', 'False', 'EMBED_DIM', '512', 'TEST.LN_FACTOR', '1.', 'TEST.RPN_NMS_THRESH', '0.7', 'TEST.NMS', '0.3']

@@ -8,11 +8,12 @@ import os.path as osp
 from PIL import Image
 import six
 from six.moves import xrange
-from im2txt.faster_rcnn.utils.cython_bbox import bbox_overlaps
 import numpy as np
 import scipy.sparse
-from im2txt.densecap.config import cfg
-
+import sys
+sys.path.append('../')
+from dense2p.config import cfg
+from dense2p.region_detector.utils.box_ops import pairwise_iou as bbox_overlaps
 
 class imdb(object):
     """Image database."""

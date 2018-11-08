@@ -131,9 +131,8 @@ def main():
     cfg.TRAIN.USE_FLIPPED = orgflip
 
     # load network
-    if args.net == 'vgg16':
-        net = vgg16()
-    elif args.net == 'res50':
+
+    if args.net == 'res50':
         net = resnetv1(num_layers=50)
     elif args.net == 'res101':
         net = resnetv1(num_layers=101)

@@ -41,17 +41,6 @@ def parse_args():
     parser.add_argument('--imdb', dest='imdb_name',
                         help='dataset to test on',
                         default='vg_1.2_test', type=str)
-    # TODO: delete extra options
-    # parser.add_argument('--iters', dest='max_iters',
-    #                     help='number of iterations to train',
-    #                     default=40000, type=int)
-    # parser.add_argument('--imdbval', dest='imdbval_name',
-    #                     help='dataset to validation on',
-    #                     default='vg_1.2_val', type=str)
-    # parser.add_argument('--rand', dest='randomize',
-    #                     help='randomize (do not use a fixed seed)',
-    #                     action='store_true')
-    # TODO: add inception
     parser.add_argument('--net', dest='net',
                         help='vgg16, res50, res101, res152',
                         default='res50', type=str)
@@ -90,9 +79,8 @@ if __name__ == '__main__':
 
     imdb = get_imdb(args.imdb_name)
     # load network
-    if args.net == 'vgg16':
-        net = vgg16()
-    elif args.net == 'res50':
+
+    if args.net == 'res50':
         net = resnetv1(num_layers=50)
     elif args.net == 'res101':
         net = resnetv1(num_layers=101)

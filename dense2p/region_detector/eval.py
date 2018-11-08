@@ -14,9 +14,9 @@ from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 import pycocotools.mask as cocomask
 
-from coco import COCOMeta
-from common import CustomResize, clip_boxes
-from config import config as cfg
+from .coco import COCOMeta
+from .common import CustomResize, clip_boxes
+from .config import config as cfg
 
 DetectionResult = namedtuple(
     'DetectionResult',

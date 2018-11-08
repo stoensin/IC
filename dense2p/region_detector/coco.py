@@ -11,7 +11,7 @@ from tensorpack.utils import logger
 from tensorpack.utils.timer import timed_operation
 from tensorpack.utils.argtools import log_once
 
-from config import config as cfg
+from .config import config as cfg
 
 
 __all__ = ['COCODetection', 'COCOMeta']
