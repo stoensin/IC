@@ -58,6 +58,7 @@ from region_detector.viz import (
 from region_detector.eval import (
     eval_coco, detect_one_image, print_evaluation_scores, DetectionResult)
 from region_detector.config import finalize_configs, config as cfg
+
 assert six.PY3, "Please go Python 3!"
 
 
@@ -92,6 +93,7 @@ class DetectionModel(ModelDesc):
 
 
 class ResNetC4Model(DetectionModel):
+
     def inputs(self):
         ret = [
             tf.placeholder(tf.float32, (None, None, 3), 'image'),
@@ -354,26 +356,11 @@ class Dense2pModel(object):
         self._train_summaries = []
         self._event_summaries = {}
         self._variables_to_fix = {}
-        self._detectorModel = None
         self._mode = None
-        self._image = tf.placeholder(tf.float32, shape=[1, None, None, 3])
-        self._im_info = tf.placeholder(tf.float32, shape=[3])
-
-        self._gt_boxes = tf.placeholder(tf.float32, shape=[None, 5])
-
-        self._gt_phrases = tf.placeholder(tf.int32, shape=[None, model_cfg.MAX_WORDS])
-
-        self._gt_ptokens = tf.placeholder(tf.int32, shape=[None, model_cfg.MAX_WORDS])
-
-        self._anchor_scales = model_cfg.ANCHOR_SCALES
-        self._num_scales = len(self._anchor_scales)
-        self._anchor_ratios = model_cfg.ANCHOR_RATIOS
-        self._num_ratios = len(self._anchor_ratios)
-        self._num_anchors = self._num_scales * self._num_ratios
 
         # FOR RegionPooling_HierarchicalRNN
         self.n_words = 1
-        self.batch_size = 256
+        self.batch_size = 8
         self.num_boxes = 50  # 50
         self.feats_dim = 4096  # 4096
         self.project_dim = 1024  # 1024
@@ -425,9 +412,20 @@ class Dense2pModel(object):
         else:
             self.embed_word_b = tf.Variable(tf.zeros([self.n_words]), name='embed_word_b')
 
+    def recognitionNetwork_layer(self, regions, feature_dim=4096):
+        # Produces each region of rois to dimension 4096
+        fc1 = FullyConnected(
+            'recognition', regions, feature_dim, activation=tf.nn.relu,
+            kernel_initializer=tf.random_normal_initializer(stddev=0.01))
+        fc1_dropout = Dropout('dropout', fc1, 0.5, training=get_current_tower_context().is_training)
+        fc2 = FullyConnected(
+            'recognition', fc1fc1_dropout, feature_dim, activation=tf.nn.relu,
+            kernel_initializer=tf.random_normal_initializer(stddev=0.01))
+        fc2_dropout = Dropout('dropout', fc2, 0.5, training=get_current_tower_context().is_training)
+        return fc2_dropout
+
     def _hierarchicalRNN_layer(self, region_featurs):
-        # receive the feats in the current image
-        # it's shape is 10 x 50 x 4096
+        # region_featurs's shape is 8 x 50 x 4096
         # tmp_feats: 500 x 4096
         # feats = tf.placeholder(tf.float32, [self.batch_size, self.num_boxes, self.feats_dim])
         feats = region_featurs
@@ -573,19 +571,13 @@ class Dense2pModel(object):
 
                 if j == 0:
                     with tf.device('/cpu:0'):
-                        # get word embedding of BOS (index = 0)
+                        # get word embedding of SOS (index = 0)
                         current_embed = tf.nn.embedding_lookup(self.Wemb, tf.zeros([1], dtype=tf.int64))
 
                 with tf.variable_scope('word_LSTM', reuse=tf.AUTO_REUSE):
                     word_output, word_state = self.word_LSTM(current_embed, word_state)
 
-                # word_state:
-                # (
-                #     LSTMStateTuple(c=<tf.Tensor 'word_LSTM_152/MultiRNNCell/Cell0/BasicLSTMCell/add_2:0' shape=(1, 512) dtype=float32>,
-                #                    h=<tf.Tensor 'word_LSTM_152/MultiRNNCell/Cell0/BasicLSTMCell/mul_2:0' shape=(1, 512) dtype=float32>),
-                #     LSTMStateTuple(c=<tf.Tensor 'word_LSTM_152/MultiRNNCell/Cell1/BasicLSTMCell/add_2:0' shape=(1, 512) dtype=float32>,
-                #                    h=<tf.Tensor 'word_LSTM_152/MultiRNNCell/Cell1/BasicLSTMCell/mul_2:0' shape=(1, 512) dtype=float32>)
-                # )
+                # word_state (1x512):
                 logit_words = tf.nn.xw_plus_b(word_output, self.embed_word_W, self.embed_word_b)
                 max_prob_index = tf.argmax(logit_words, 1)[0]
                 generated_sent.append(max_prob_index)
@@ -612,14 +604,76 @@ class Dense2pModel(object):
         elif self._mode == 'TEST':
             tf_feats, tf_generated_paragraph, tf_pred_re, tf_sentence_topic_vectors = _hierarchicalRNN_generate_layer(region_featurs)
 
-    def recognitionNetwork(self, regions, feature_dim=4096):
-        # Produces each region of rois to dimension 4096
-        fc1 = FullyConnected(
-            'recognition', regions, feature_dim, activation=tf.nn.relu,
-            kernel_initializer=tf.random_normal_initializer(stddev=0.01))
-        fc1_dropout = Dropout('dropout', fc1, 0.5, training=get_current_tower_context().is_training)
-        fc2 = FullyConnected(
-            'recognition', fc1fc1_dropout, feature_dim, activation=tf.nn.relu,
-            kernel_initializer=tf.random_normal_initializer(stddev=0.01))
-        fc2_dropout = Dropout('dropout', fc2, 0.5, training=get_current_tower_context().is_training)
-        return fc2_dropout
+    def train_net(self, args):
+
+        MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
+
+        if args.visualize or args.evaluate or args.predict:
+            pass
+        else:
+            is_horovod = cfg.TRAINER == 'horovod'
+            if is_horovod:
+                hvd.init()
+                logger.info("Horovod Rank={}, Size={}".format(hvd.rank(), hvd.size()))
+
+            if not is_horovod or hvd.rank() == 0:
+                logger.set_logger_dir(args.logdir, 'd')
+
+            finalize_configs(is_training=True)
+            stepnum = cfg.TRAIN.STEPS_PER_EPOCH
+
+            # warmup is step based, lr is epoch based
+            init_lr = cfg.TRAIN.BASE_LR * 0.33 * min(8. / cfg.TRAIN.NUM_GPUS, 1.)
+            warmup_schedule = [(0, init_lr), (cfg.TRAIN.WARMUP, cfg.TRAIN.BASE_LR)]
+            warmup_end_epoch = cfg.TRAIN.WARMUP * 1. / stepnum
+            lr_schedule = [(int(warmup_end_epoch + 0.5), cfg.TRAIN.BASE_LR)]
+
+            factor = 8. / cfg.TRAIN.NUM_GPUS
+            for idx, steps in enumerate(cfg.TRAIN.LR_SCHEDULE[:-1]):
+                mult = 0.1 ** (idx + 1)
+                lr_schedule.append(
+                    (steps * factor // stepnum, cfg.TRAIN.BASE_LR * mult))
+            logger.info("Warm Up Schedule (steps, value): " + str(warmup_schedule))
+            logger.info("LR Schedule (epochs, value): " + str(lr_schedule))
+            train_dataflow = get_train_dataflow()
+            # This is what's commonly referred to as "epochs"
+            total_passes = cfg.TRAIN.LR_SCHEDULE[-1] * 8 / train_dataflow.size()
+            logger.info("Total passes of the training set is: {}".format(total_passes))
+
+            callbacks = [
+                PeriodicCallback(
+                    ModelSaver(max_to_keep=10, keep_checkpoint_every_n_hours=1),
+                    every_k_epochs=20),
+                # linear warmup
+                ScheduledHyperParamSetter(
+                    'learning_rate', warmup_schedule, interp='linear', step_based=True),
+                ScheduledHyperParamSetter('learning_rate', lr_schedule),
+                # EvalCallback(*MODEL.get_inference_tensor_names()),
+                PeakMemoryTracker(),
+                EstimatedTimeLeft(median=True),
+                SessionRunTimeout(60000).set_chief_only(True),   # 1 minute timeout
+            ]
+            if not is_horovod:
+                callbacks.append(GPUUtilizationTracker())
+            if is_horovod and hvd.rank() > 0:
+                session_init = None
+            else:
+                if args.load:
+                    session_init = get_model_loader(args.load)
+                else:
+                    session_init = get_model_loader(cfg.BACKBONE.WEIGHTS) if cfg.BACKBONE.WEIGHTS else None
+
+            traincfg = TrainConfig(
+                model=MODEL,
+                data=QueueInput(train_dataflow),
+                callbacks=callbacks,
+                steps_per_epoch=stepnum,
+                max_epoch=cfg.TRAIN.LR_SCHEDULE[-1] * factor // stepnum,
+                session_init=session_init,
+            )
+            if is_horovod:
+                trainer = HorovodTrainer(average=False)
+            else:
+                # nccl mode has better speed than cpu mode
+                trainer = SyncMultiGPUTrainerReplicated(cfg.TRAIN.NUM_GPUS, average=False, mode='nccl')
+            launch_train_with_config(traincfg, trainer)

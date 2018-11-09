@@ -1,5 +1,4 @@
 import os
-from .imdb import imdb
 import xml.etree.ElementTree as ET
 import numpy as np
 import scipy.sparse
@@ -9,41 +8,41 @@ import subprocess
 import uuid
 import json
 import sys
+from .imdb import imdb
 sys.path.append('../')
-from dense2p.config import cfg
 
 DEBUG = False
 USE_CACHE = True
-UNK_IDENTIFIER='<unk>'
-DEFAULT_PATH='data/visual_genome'
+UNK_IDENTIFIER = '<unk>'
+DEFAULT_PATH = 'data/visual_genome'
 
 
 class visual_genome(imdb):
     def __init__(self, image_set, version):
-        imdb.__init__(self, 'vg_' + version+ '_' + image_set)
+        imdb.__init__(self, 'vg_' + version + '_' + image_set)
         self._image_set = image_set
 
-        self._data_path  = '%s/%s' % (DEFAULT_PATH, version)
-        cfg.CACHE_DIR = self._data_path
+        self._data_path = '%s/%s' % (DEFAULT_PATH, version)
+
         self._image_ext = '.jpg'
         print 'data_path: %s' % self._data_path
         region_imset_path = os.path.join(self._data_path, '%s_gt_regions.json' % image_set)
         self._classes = ('__background__', '__foreground__')
         print 'loading from %s' % region_imset_path
         self._gt_regions = json.load(open(region_imset_path))
-        #print self._gt_regions.items()[0]
+        # print self._gt_regions.items()[0]
         self._image_index = self._load_image_set_index()
         # Default to roidb handler
         self._roidb_handler = self.rpn_roidb
         self._salt = str(uuid.uuid4())
-        vocab_path = os.path.join(self._data_path,'vocabulary.txt')
-        with open(vocab_path,'r') as f:
+        vocab_path = os.path.join(self._data_path, 'vocabulary.txt')
+        with open(vocab_path, 'r') as f:
             self._vocabulary_inverted = [line.strip() for line in f]
 
-        self._vocabulary = dict([(w,i) for i,w in enumerate(self._vocabulary_inverted)])
+        self._vocabulary = dict([(w, i) for i, w in enumerate(self._vocabulary_inverted)])
 
         assert os.path.exists(self._data_path), \
-                'Path does not exist: {}'.format(self._data_path)
+            'Path does not exist: {}'.format(self._data_path)
 
     def image_path_at(self, i):
         """
@@ -57,7 +56,7 @@ class visual_genome(imdb):
         """
         image_path = self._gt_regions[index]['path']
         assert os.path.exists(image_path), \
-                'Path does not exist: {}'.format(image_path)
+            'Path does not exist: {}'.format(image_path)
         return image_path
 
     def _load_image_set_index(self):
@@ -69,7 +68,7 @@ class visual_genome(imdb):
         return image_index
 
     def get_gt_regions(self):
-        return [v for k,v in self._gt_regions.iteritems()]
+        return [v for k, v in self._gt_regions.iteritems()]
 
     def get_gt_regions_index(self, index):
         return self._gt_regions[index]
@@ -92,16 +91,16 @@ class visual_genome(imdb):
 
         gt_roidb = [self._load_vg_annotation(index) for index in self._image_index]
         gt_phrases = {}
-        for k,v in self._gt_regions.iteritems():
+        for k, v in self._gt_regions.iteritems():
             for reg in v['regions']:
                 gt_phrases[reg['id']] = self._line_to_stream(reg['phrase_tokens'])
 
                 if DEBUG:
-                #CHECK consistency
+                    # CHECK consistency
                     for wi, w in zip(gt_phrases[reg['id']], reg['phrase_tokens']):
                         vocab_w = self._vocabulary_inverted[wi-1]
-                        print vocab_w,w
-                        assert( vocab_w == UNK_IDENTIFIER or vocab_w == w)
+                        print vocab_w, w
+                        assert(vocab_w == UNK_IDENTIFIER or vocab_w == w)
         with open(cache_file, 'wb') as fid:
             cPickle.dump(gt_roidb, fid, cPickle.HIGHEST_PROTOCOL)
         with open(cache_file_phrases, 'wb') as fid:
@@ -109,7 +108,6 @@ class visual_genome(imdb):
         print 'wrote gt roidb to {}'.format(cache_file)
         print 'wrote gt phrases to {}'.format(cache_file_phrases)
         return gt_roidb
-
 
     def rpn_roidb(self):
         if self._image_set != 'test':
@@ -125,7 +123,7 @@ class visual_genome(imdb):
         filename = self.config['rpn_file']
         print 'loading {}'.format(filename)
         assert os.path.exists(filename), \
-               'rpn data not found at: {}'.format(filename)
+            'rpn data not found at: {}'.format(filename)
         with open(filename, 'rb') as f:
             box_list = cPickle.load(f)
         return self.create_roidb_from_box_list(box_list, gt_roidb)
@@ -142,7 +140,7 @@ class visual_genome(imdb):
         stream = [s + 1 for s in stream]
         return stream
 
-    def _load_vg_annotation(self,index):
+    def _load_vg_annotation(self, index):
         """
         Load image and bounding boxes info from XML file in the PASCAL VOC
         format.
@@ -166,19 +164,20 @@ class visual_genome(imdb):
             y2 = reg['y'] + reg['height']
 
             boxes[ix, :] = [x1, y1, x2, y2]
-            gt_classes[ix] = reg['id']#replace the class id with region id so that can retrieve the caption later
+            gt_classes[ix] = reg['id']  # replace the class id with region id so that can retrieve the caption later
             overlaps[ix, 1] = 1.0
             seg_areas[ix] = (x2 - x1 + 1) * (y2 - y1 + 1)
 
         overlaps = scipy.sparse.csr_matrix(overlaps)
-        return {'boxes' : boxes,
+        return {'boxes': boxes,
                 'gt_classes': gt_classes,
-                'gt_overlaps' : overlaps,
-                'flipped' : False,
-                'seg_areas' : seg_areas}
+                'gt_overlaps': overlaps,
+                'flipped': False,
+                'seg_areas': seg_areas}
 
 
 if __name__ == '__main__':
-    d = visual_genome('train','1.2')
+    d = visual_genome('train', '1.2')
     res = d.roidb
-    from IPython import embed; embed()
+    from IPython import embed
+    embed()

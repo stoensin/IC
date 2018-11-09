@@ -1,8 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-
 import os
 import os.path as osp
 from PIL import Image
@@ -11,9 +6,10 @@ from six.moves import xrange
 import numpy as np
 import scipy.sparse
 import sys
-sys.path.append('../')
-from dense2p.config import cfg
 from dense2p.region_detector.utils.box_ops import pairwise_iou as bbox_overlaps
+
+DATA_DIR = 'VG/'
+
 
 class imdb(object):
     """Image database."""
@@ -71,7 +67,7 @@ class imdb(object):
 
     @property
     def cache_path(self):
-        cache_path = osp.abspath(osp.join(cfg.DATA_DIR, 'cache'))
+        cache_path = osp.abspath(osp.join(DATA_DIR, 'cache'))
         if not os.path.exists(cache_path):
             os.makedirs(cache_path)
         return cache_path
