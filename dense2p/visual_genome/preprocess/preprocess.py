@@ -1,6 +1,6 @@
 ##########################################################
-#### Preprocessing of visual genome dataset, including vocabularity generation,
-#### removing invalid bboxes and phrases, tokenization, and result saving
+# Preprocessing of visual genome dataset, including vocabularity generation,
+# removing invalid bboxes and phrases, tokenization, and result saving
 #########################################################
 from __future__ import absolute_import
 from __future__ import division
@@ -38,7 +38,7 @@ VG_METADATA_PATH = '%s/%s/image_data.json' % (VG_PATH, VG_VERSION)
 vocabulary_size = 10000
 HAS_VOCAB = True
 OUTPUT_DIR = args.output_dir
-SPLITS_PATH = '/content/im2txt/visual_genome/process'+ '/%s_split.json'
+SPLITS_PATH = '/%s_split.json'
 
 
 # UNK_IDENTIFIER is the word used to identify unknown words
@@ -54,7 +54,6 @@ class VGDataProcessor:
         num_bbox = 0
         num_empty_phrase = 0
 
-
         tic = time.time()
         for i in tqdm(xrange(len(image_data)), desc='%s' % split_name):
             image_info = image_data[i]
@@ -63,7 +62,6 @@ class VGDataProcessor:
 
             if im_id not in split_ids:
                 continue
-
 
             item = regions_all[i]
             if item['id'] != im_id:
@@ -146,7 +144,7 @@ def extract_paras(paras_json, max_words=MAX_WORDS):
             phrase = s.strip().encode('ascii', 'ignore').lower()
             if len(phrase) == 0:
                 continue
-            phrase_tokens = phrase.translate(None, string.punctuation).split()
+            phrase_tokens = phrase.translate(str.maketrans('', '', string.punctuation)).split()
             if len(phrase_tokens) > max_words:
                 num_filtered_sents += 1
                 continue

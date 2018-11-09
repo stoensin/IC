@@ -73,19 +73,19 @@ _C = config     # short alias to avoid coding
 
 # mode flags ---------------------
 _C.TRAINER = 'replicated'  # options: 'horovod', 'replicated'
-_C.MODE_MASK = True        # FasterRCNN or MaskRCNN
+_C.MODE_MASK = False        # FasterRCNN or MaskRCNN
 _C.MODE_FPN = True
 
 # dataset -----------------------
-_C.DATA.BASEDIR = '/path/to/your/COCO/DIR'
-_C.DATA.TRAIN = ['train2014', 'valminusminival2014']   # i.e. trainval35k, AKA train2017
+_C.DATA.BASEDIR = '/content/VG'
+_C.DATA.TRAIN = 'images'   # i.e. train2014 trainval35k, AKA train2017,valminusminival2014
 # For now, only support evaluation on single dataset
-_C.DATA.VAL = 'minival2014'  # AKA val2017
+_C.DATA.VAL = 'images'  # AKA val2017 minival2014
 _C.DATA.NUM_CATEGORY = 50    # 80 categories.
 _C.DATA.CLASS_NAMES = []  # NUM_CLASS (NUM_CATEGORY+1) strings, to be populated later by data loader. The first is BG.
 
 # basemodel ----------------------
-_C.BACKBONE.WEIGHTS = ''   # /path/to/weights.npz
+_C.BACKBONE.WEIGHTS = '/content/weights/ckpt.npz'   # /path/to/weights.npz
 _C.BACKBONE.RESNET_NUM_BLOCK = [3, 4, 6, 3]     # for resnet50
 # RESNET_NUM_BLOCK = [3, 4, 23, 3]    # for resnet101
 _C.BACKBONE.FREEZE_AFFINE = False   # do not train affine parameters inside norm layers

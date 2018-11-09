@@ -49,7 +49,7 @@ from region_detector.model_cascade import CascadeRCNNHead
 from region_detector.model_box import (
     clip_boxes, crop_and_resize, roi_align, RPNAnchors)
 
-from region_detector.data import (
+from visual_genome.dataset import (
     get_train_dataflow, get_eval_dataflow,
     get_all_anchors, get_all_anchors_fpn)
 from region_detector.viz import (

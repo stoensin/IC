@@ -12,7 +12,7 @@ from tensorpack.dataflow import (
     MapDataComponent, DataFromList)
 from tensorpack.utils import logger
 
-from dense2p.region_detector.coco import COCODetection
+from .vg_coco import COCODetection
 from dense2p.region_detector.utils.generate_anchors import generate_anchors
 from dense2p.region_detector.utils.np_box_ops import area as np_area
 from dense2p.region_detector.common import (
@@ -281,7 +281,7 @@ def get_train_dataflow():
     """
 
     roidbs = COCODetection.load_many(
-        cfg.DATA.BASEDIR, cfg.DATA.TRAIN, add_gt=True, add_mask=cfg.MODE_MASK)
+        cfg.DATA.BASEDIR, cfg.DATA.TRAIN, 'train', add_gt=True, add_mask=cfg.MODE_MASK)
     """
     To train on your own data, change this to your loader.
     Produce "roidbs" as a list of dict, in the dict the following keys are needed for training:
@@ -386,7 +386,7 @@ def get_eval_dataflow(shard=0, num_shards=1):
     Args:
         shard, num_shards: to get subset of evaluation data
     """
-    roidbs = COCODetection.load_many(cfg.DATA.BASEDIR, cfg.DATA.VAL, add_gt=False)
+    roidbs = COCODetection.load_many(cfg.DATA.BASEDIR, cfg.DATA.VAL, 'val', add_gt=False)
     num_imgs = len(roidbs)
     img_per_shard = num_imgs // num_shards
     img_range = (shard * img_per_shard, (shard + 1) * img_per_shard if shard + 1 < num_shards else num_imgs)
