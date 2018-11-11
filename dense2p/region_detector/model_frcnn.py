@@ -5,6 +5,7 @@ import tensorflow as tf
 
 from tensorpack.tfutils.summary import add_moving_summary
 from tensorpack.tfutils.argscope import argscope
+from tensorpack.tfutils.common import get_tf_version_tuple
 from tensorpack.tfutils.scope_utils import under_name_scope
 from tensorpack.models import (
     Conv2D, FullyConnected, layer_register)
