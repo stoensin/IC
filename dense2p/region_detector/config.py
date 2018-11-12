@@ -78,9 +78,9 @@ _C.MODE_FPN = True
 
 # dataset -----------------------
 _C.DATA.BASEDIR = '/content/VG'
-_C.DATA.TRAIN = 'images'   # i.e. train2014 trainval35k, AKA train2017,valminusminival2014
+_C.DATA.TRAIN = 'train'   # i.e. train2014 trainval35k, AKA train2017,valminusminival2014
 # For now, only support evaluation on single dataset
-_C.DATA.VAL = 'images'  # AKA val2017 minival2014
+_C.DATA.VAL = 'train'  # AKA val2017 minival2014
 _C.DATA.NUM_CATEGORY = 50    # 80 categories.
 _C.DATA.CLASS_NAMES = []  # NUM_CLASS (NUM_CATEGORY+1) strings, to be populated later by data loader. The first is BG.
 

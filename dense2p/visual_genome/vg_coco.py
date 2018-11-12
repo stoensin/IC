@@ -22,6 +22,7 @@ class _COCOMeta(object):
     INSTANCE_TO_BASEDIR = {
         'valminusminival2014': 'val2014',
         'minival2014': 'val2014',
+        'train': 'images'
     }
 
     def valid(self):
@@ -55,7 +56,7 @@ class COCODetection(object):
             basedir, COCOMeta.INSTANCE_TO_BASEDIR.get(name, name)))
         assert os.path.isdir(self._imgdir), self._imgdir
         annotation_file = os.path.join(
-            basedir, 'annotations/{}_gt_paragraph.json'.format(tag))
+            basedir, 'annotations/{}_set.json'.format(tag))
         assert os.path.isfile(annotation_file), annotation_file
 
         from pycocotools.coco import COCO
@@ -112,8 +113,8 @@ class COCODetection(object):
         """
         # ann_ids = self.coco.getAnnIds(imgIds=img['id'])
         # objs = self.coco.loadAnns(ann_ids)
-        objs = self.coco.imgToAnns[img['id']]  # equivalent but faster than the above two lines
-
+        # objs = self.coco.imgToAnns[img['id']]  # equivalent but faster than the above two lines
+        objs = img['regions']
         # clean-up boxes
         valid_objs = []
         width = img['width']
@@ -135,33 +136,17 @@ class COCODetection(object):
                 obj['bbox'] = [x1, y1, x1 + w, y1 + h]
                 valid_objs.append(obj)
 
-                if add_mask:
-                    segs = obj['segmentation']
-                    if not isinstance(segs, list):
-                        assert obj['iscrowd'] == 1
-                        obj['segmentation'] = None
-                    else:
-                        valid_segs = [np.asarray(p).reshape(-1, 2).astype('float32') for p in segs if len(p) >= 6]
-                        if len(valid_segs) < len(segs):
-                            log_once("Image {} has invalid polygons!".format(img['file_name']), 'warn')
-
-                        obj['segmentation'] = valid_segs
-
         # all geometrically-valid boxes are returned
         boxes = np.asarray([obj['bbox'] for obj in valid_objs], dtype='float32')  # (n, 4)
-        cls = np.asarray([
-            COCOMeta.category_id_to_class_id[obj['category_id']]
-            for obj in valid_objs], dtype='int32')  # (n,)
-        is_crowd = np.asarray([obj['iscrowd'] for obj in valid_objs], dtype='int8')
+        # cls = np.asarray([
+        #     COCOMeta.category_id_to_class_id[obj['category_id']]
+        #     for obj in valid_objs], dtype='int32')  # (n,)
+        is_crowd = 0  # np.asarray([obj['iscrowd'] for obj in valid_objs], dtype='int8')
 
         # add the keys
         img['boxes'] = boxes        # nx4
-        img['class'] = cls          # n, always >0
-        img['is_crowd'] = is_crowd  # n,
-        if add_mask:
-            # also required to be float32
-            img['segmentation'] = [
-                obj['segmentation'] for obj in valid_objs]
+        img['class'] = len(valid_objs)          # cls n, always >0
+        img['is_crowd'] = 0  # is_crowd n,
 
     def print_class_histogram(self, imgs):
         nr_class = len(COCOMeta.class_names)
@@ -197,7 +182,7 @@ class COCODetection(object):
 
 
 if __name__ == '__main__':
-    c = COCODetection(cfg.DATA.BASEDIR, 'train2014')
+    c = COCODetection(cfg.DATA.BASEDIR, 'train')
     gt_boxes = c.load(add_gt=True, add_mask=True)
     print("#Images:", len(gt_boxes))
     c.print_class_histogram(gt_boxes)

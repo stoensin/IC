@@ -351,26 +351,6 @@ def get_train_dataflow():
             log_once("Input {} is filtered for training: {}".format(fname, str(e)), 'warn')
             return None
 
-        if cfg.MODE_MASK:
-            # augmentation will modify the polys in-place
-            segmentation = copy.deepcopy(roidb['segmentation'])
-            segmentation = [segmentation[k] for k in range(len(segmentation)) if not is_crowd[k]]
-            assert len(segmentation) == len(boxes)
-
-            # Apply augmentation on polygon coordinates.
-            # And produce one image-sized binary mask per box.
-            masks = []
-            for polys in segmentation:
-                polys = [aug.augment_coords(p, params) for p in polys]
-                masks.append(segmentation_to_mask(polys, im.shape[0], im.shape[1]))
-            masks = np.asarray(masks, dtype='uint8')    # values in {0, 1}
-            ret['gt_masks'] = masks
-
-            # from viz import draw_annotation, draw_mask
-            # viz = draw_annotation(im, boxes, klass)
-            # for mask in masks:
-            #     viz = draw_mask(viz, mask)
-            # tpviz.interactive_imshow(viz)
         return ret
 
     if cfg.TRAINER == 'horovod':
