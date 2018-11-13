@@ -6,6 +6,8 @@ import os
 from termcolor import colored
 from tabulate import tabulate
 import tqdm
+import json
+import pickle
 
 from tensorpack.utils import logger
 from tensorpack.utils.timer import timed_operation
@@ -54,10 +56,9 @@ class COCODetection(object):
         self.name = name
         self._imgdir = os.path.realpath(os.path.join(
             basedir, COCOMeta.INSTANCE_TO_BASEDIR.get(name, name)))
+
         assert os.path.isdir(self._imgdir), self._imgdir
-        annotation_file = os.path.join(
-            basedir, 'annotations/{}_set.json'.format(tag))
-        assert os.path.isfile(annotation_file), annotation_file
+        annotation_file = '{}_sets.json'.format(tag)
 
         from pycocotools.coco import COCO
         self.coco = COCO(annotation_file)
@@ -93,18 +94,9 @@ class COCODetection(object):
             imgs = self.coco.loadImgs(img_ids)
 
             for img in tqdm.tqdm(imgs):
-                self._use_absolute_file_name(img)
                 if add_gt:
                     self._add_detection_gt(img, add_mask)
             return imgs
-
-    def _use_absolute_file_name(self, img):
-        """
-        Change relative filename to abosolute file name.
-        """
-        img['file_name'] = os.path.join(
-            self._imgdir, img['file_name'])
-        assert os.path.isfile(img['file_name']), img['file_name']
 
     def _add_detection_gt(self, img, add_mask):
         """
@@ -119,51 +111,34 @@ class COCODetection(object):
         valid_objs = []
         width = img['width']
         height = img['height']
-        for obj in objs:
+        region_len = len(objs)
+        gt_classes = np.zeros((region_len), dtype=np.int32)
+        for i, obj in enumerate(objs):
             if obj.get('ignore', 0) == 1:
                 continue
             x1, y1, w, h = obj['bbox']
             # bbox is originally in float
             # x1/y1 means upper-left corner and w/h means true w/h. This can be verified by segmentation pixels.
             # But we do make an assumption here that (0.0, 0.0) is upper-left corner of the first pixel
-
+            gt_classes[i] = region_len  # obj['region_id']
             x1 = np.clip(float(x1), 0, width)
             y1 = np.clip(float(y1), 0, height)
             w = np.clip(float(x1 + w), 0, width) - x1
             h = np.clip(float(y1 + h), 0, height) - y1
             # Require non-zero seg area and more than 1x1 box size
-            if obj['area'] > 1 and w > 0 and h > 0 and w * h >= 4:
+            if w > 0 and h > 0 and w * h >= 4:
                 obj['bbox'] = [x1, y1, x1 + w, y1 + h]
                 valid_objs.append(obj)
 
         # all geometrically-valid boxes are returned
         boxes = np.asarray([obj['bbox'] for obj in valid_objs], dtype='float32')  # (n, 4)
-        # cls = np.asarray([
-        #     COCOMeta.category_id_to_class_id[obj['category_id']]
-        #     for obj in valid_objs], dtype='int32')  # (n,)
-        is_crowd = 0  # np.asarray([obj['iscrowd'] for obj in valid_objs], dtype='int8')
+        cls = np.asarray([img['category_id']], dtype='int32')
+        is_crowd = np.zeros((region_len), dtype=np.int8)  # np.asarray([obj['iscrowd'] for obj in valid_objs], dtype='int8')
 
         # add the keys
         img['boxes'] = boxes        # nx4
-        img['class'] = len(valid_objs)          # cls n, always >0
-        img['is_crowd'] = 0  # is_crowd n,
-
-    def print_class_histogram(self, imgs):
-        nr_class = len(COCOMeta.class_names)
-        hist_bins = np.arange(nr_class + 1)
-
-        # Histogram of ground-truth objects
-        gt_hist = np.zeros((nr_class,), dtype=np.int)
-        for entry in imgs:
-            # filter crowd?
-            gt_inds = np.where(
-                (entry['class'] > 0) & (entry['is_crowd'] == 0))[0]
-            gt_classes = entry['class'][gt_inds]
-            gt_hist += np.histogram(gt_classes, bins=hist_bins)[0]
-        data = [[COCOMeta.class_names[i], v] for i, v in enumerate(gt_hist)]
-        data.append(['total', sum([x[1] for x in data])])
-        table = tabulate(data, headers=['class', '#box'], tablefmt='pipe')
-        logger.info("Ground-Truth Boxes:\n" + colored(table, 'cyan'))
+        img['class'] = gt_classes          # cls n, always >0
+        img['is_crowd'] = is_crowd  # is_crowd n,
 
     @staticmethod
     def load_many(basedir, names, add_gt=True, add_mask=False):
@@ -183,6 +158,5 @@ class COCODetection(object):
 
 if __name__ == '__main__':
     c = COCODetection(cfg.DATA.BASEDIR, 'train')
-    gt_boxes = c.load(add_gt=True, add_mask=True)
+    gt_boxes = c.load(add_gt=True, add_mask=False)
     print("#Images:", len(gt_boxes))
-    c.print_class_histogram(gt_boxes)

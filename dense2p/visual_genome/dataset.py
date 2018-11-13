@@ -4,6 +4,7 @@
 import cv2
 import numpy as np
 import copy
+import pickle
 
 from tensorpack.utils.argtools import memoized, log_once
 from tensorpack.dataflow import (
@@ -206,7 +207,7 @@ def get_rpn_anchor_input(im, boxes, is_crowd):
     # only use anchors inside the image
     inside_ind, inside_anchors = filter_boxes_inside_shape(featuremap_anchors_flatten, im.shape[:2])
     # obtain anchor labels and their corresponding gt boxes
-    anchor_labels, anchor_gt_boxes = get_anchor_labels(inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1])
+    anchor_labels, anchor_gt_boxes = get_anchor_labels(inside_anchors, boxes, [])
 
     # Fill them back to original size: fHxfWx1, fHxfWx4
     anchorH, anchorW = all_anchors.shape[:2]
@@ -239,7 +240,7 @@ def get_multilevel_rpn_anchor_input(im, boxes, is_crowd):
     all_anchors_flatten = np.concatenate(flatten_anchors_per_level, axis=0)
 
     inside_ind, inside_anchors = filter_boxes_inside_shape(all_anchors_flatten, im.shape[:2])
-    anchor_labels, anchor_gt_boxes = get_anchor_labels(inside_anchors, boxes[is_crowd == 0], boxes[is_crowd == 1])
+    anchor_labels, anchor_gt_boxes = get_anchor_labels(inside_anchors,  boxes, [])
 
     # map back to all_anchors, then split to each level
     num_all_anchors = all_anchors_flatten.shape[0]
@@ -281,7 +282,7 @@ def get_train_dataflow():
     """
 
     roidbs = COCODetection.load_many(
-        cfg.DATA.BASEDIR, cfg.DATA.TRAIN, 'train', add_gt=True, add_mask=cfg.MODE_MASK)
+        cfg.DATA.BASEDIR, cfg.DATA.TRAIN, add_gt=True, add_mask=cfg.MODE_MASK)
     """
     To train on your own data, change this to your loader.
     Produce "roidbs" as a list of dict, in the dict the following keys are needed for training:
@@ -303,9 +304,8 @@ def get_train_dataflow():
     # Valid training images should have at least one fg box.
     # But this filter shall not be applied for testing.
     num = len(roidbs)
-    roidbs = list(filter(lambda img: len(img['boxes'][img['is_crowd'] == 0]) > 0, roidbs))
-    logger.info("Filtered {} images which contain no non-crowd groudtruth boxes. Total #images for training: {}".format(
-        num - len(roidbs), len(roidbs)))
+    roidbs = list(filter(lambda img: len(img['boxes']) > 0, roidbs))
+    # logger.info("Filtered {} images which contain no non-crowd groudtruth boxes. Total #images for training: {}".format(num - len(roidbs), len(roidbs)))
 
     ds = DataFromList(roidbs, shuffle=True)
 
@@ -314,7 +314,7 @@ def get_train_dataflow():
          imgaug.Flip(horiz=True)])
 
     def preprocess(roidb):
-        fname, boxes, klass, is_crowd = roidb['file_name'], roidb['boxes'], roidb['class'], roidb['is_crowd']
+        fname, boxes, klass, is_crowd = roidb['path'], roidb['boxes'], roidb['class'], roidb['is_crowd']
         boxes = np.copy(boxes)
         im = cv2.imread(fname, cv2.IMREAD_COLOR)
         assert im is not None, fname
@@ -341,8 +341,6 @@ def get_train_dataflow():
                 # anchor_labels, anchor_boxes
                 ret['anchor_labels'], ret['anchor_boxes'] = get_rpn_anchor_input(im, boxes, is_crowd)
 
-            boxes = boxes[is_crowd == 0]    # skip crowd boxes in training target
-            klass = klass[is_crowd == 0]
             ret['gt_boxes'] = boxes
             ret['gt_labels'] = klass
             if not len(boxes):
@@ -351,6 +349,10 @@ def get_train_dataflow():
             log_once("Input {} is filtered for training: {}".format(fname, str(e)), 'warn')
             return None
 
+        img2paras = open('img2paragraph_modify_batch', 'rb')
+        img2paras_data = pickle.load(img2paras)
+        img2paras.close()
+        ret['sent_labels'] = img2paras_data
         return ret
 
     if cfg.TRAINER == 'horovod':
@@ -366,13 +368,13 @@ def get_eval_dataflow(shard=0, num_shards=1):
     Args:
         shard, num_shards: to get subset of evaluation data
     """
-    roidbs = COCODetection.load_many(cfg.DATA.BASEDIR, cfg.DATA.VAL, 'val', add_gt=False)
+    roidbs = COCODetection.load_many(cfg.DATA.BASEDIR, cfg.DATA.VAL, add_gt=False)
     num_imgs = len(roidbs)
     img_per_shard = num_imgs // num_shards
     img_range = (shard * img_per_shard, (shard + 1) * img_per_shard if shard + 1 < num_shards else num_imgs)
 
     # no filter for training
-    ds = DataFromListOfDict(roidbs[img_range[0]: img_range[1]], ['file_name', 'id'])
+    ds = DataFromListOfDict(roidbs[img_range[0]: img_range[1]], ['path', 'id'])
 
     def f(fname):
         im = cv2.imread(fname, cv2.IMREAD_COLOR)
@@ -386,7 +388,6 @@ def get_eval_dataflow(shard=0, num_shards=1):
 if __name__ == '__main__':
     import os
     from tensorpack.dataflow import PrintData
-    cfg.DATA.BASEDIR = os.path.expanduser('~/data/coco')
     ds = get_train_dataflow()
     ds = PrintData(ds, 100)
     TestDataSpeed(ds, 50000).start()

@@ -11,3 +11,4 @@ easydict>=1.6
 ijson>=2.3
 tqdm>=4.17.1
 tensorpack>=0.8.9
+tabulate
