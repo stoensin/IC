@@ -13,7 +13,7 @@ from tensorpack.utils import logger
 from tensorpack.utils.timer import timed_operation
 from tensorpack.utils.argtools import log_once
 
-from dense2p.region_detector.config import config as cfg
+from region_detector.config import config as cfg
 
 
 __all__ = ['COCODetection', 'COCOMeta']

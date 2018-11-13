@@ -3,8 +3,11 @@
 import argparse
 import pprint
 import os
+import sys
 import json
-from .dense2p import Dense2pModel
+import tensorflow as tf
+
+from dense2p import Dense2pModel
 
 
 def parse_args():
@@ -31,16 +34,11 @@ def parse_args():
 
 def main():
 
-    if get_tf_version_tuple() < (1, 6):
-        logger.warn("TF<1.6 has a bug which may lead to crash in FasterRCNN if you're unlucky.")
-    if get_tf_version_tuple() == (1, 11):
-        logger.warn("TF=1.11 has a bug which leads to crash in inference.")
-
     args = parse_args()
     print('------ called with args: -------')
     pprint.pprint(args)
 
-    Dense2pModel.train_net(args)
+    Dense2pModel.train_net(args=args)
 
 
 if __name__ == '__main__':

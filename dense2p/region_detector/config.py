@@ -77,19 +77,19 @@ _C.MODE_MASK = False        # FasterRCNN or MaskRCNN
 _C.MODE_FPN = True
 
 # dataset -----------------------
-_C.DATA.BASEDIR = '/content/VG'
-_C.DATA.TRAIN = 'train'   # i.e. train2014 trainval35k, AKA train2017,valminusminival2014
+_C.DATA.BASEDIR = '/home/u20078/densecap-tensorflow/VG/'  # /home/u20078/IMC/val2014/
+_C.DATA.TRAIN = ['train']    # i.e. train2014 trainval35k, AKA train2017,valminusminival2014
 # For now, only support evaluation on single dataset
 _C.DATA.VAL = 'train'  # AKA val2017 minival2014
-_C.DATA.NUM_CATEGORY = 79    # 80 categories.
+_C.DATA.NUM_CATEGORY = 80    # 80 categories.
 _C.DATA.CLASS_NAMES = []  # NUM_CLASS (NUM_CATEGORY+1) strings, to be populated later by data loader. The first is BG.
 
 # basemodel ----------------------
-_C.BACKBONE.WEIGHTS = '/content/weights/ckpt.npz'   # /path/to/weights.npz
+_C.BACKBONE.WEIGHTS = '/home/u20078/weights/COCO-R50FPN-MaskRCNN-StandardGN.npz'   # /path/to/weights.npz
 _C.BACKBONE.RESNET_NUM_BLOCK = [3, 4, 6, 3]     # for resnet50
 # RESNET_NUM_BLOCK = [3, 4, 23, 3]    # for resnet101
 _C.BACKBONE.FREEZE_AFFINE = False   # do not train affine parameters inside norm layers
-_C.BACKBONE.NORM = 'FreezeBN'  # options: FreezeBN, SyncBN, GN
+_C.BACKBONE.NORM = 'GN'  # options: FreezeBN, SyncBN, GN
 _C.BACKBONE.FREEZE_AT = 2  # options: 0, 1, 2
 
 # Use a base model with TF-preferred padding mode,
@@ -163,14 +163,14 @@ _C.FRCNN.FG_RATIO = 0.25  # fg ratio in a ROI batch
 _C.FPN.ANCHOR_STRIDES = (4, 8, 16, 32, 64)  # strides for each FPN level. Must be the same length as ANCHOR_SIZES
 _C.FPN.PROPOSAL_MODE = 'Level'  # 'Level', 'Joint'
 _C.FPN.NUM_CHANNEL = 256
-_C.FPN.NORM = 'None'  # 'None', 'GN'
+_C.FPN.NORM = 'GN'  # 'None', 'GN'
 # conv head and fc head are only used in FPN.
 # For C4 models, the head is C5
-_C.FPN.FRCNN_HEAD_FUNC = 'fastrcnn_2fc_head'
+_C.FPN.FRCNN_HEAD_FUNC = 'fastrcnn_4conv1fc_gn_head'
 # choices: fastrcnn_2fc_head, fastrcnn_4conv1fc_{,gn_}head
 _C.FPN.FRCNN_CONV_HEAD_DIM = 256
 _C.FPN.FRCNN_FC_HEAD_DIM = 4096  # 1024
-_C.FPN.MRCNN_HEAD_FUNC = 'maskrcnn_up4conv_head'   # choices: maskrcnn_up4conv_{,gn_}head
+_C.FPN.MRCNN_HEAD_FUNC = 'maskrcnn_up4conv_gn_head'   # choices: maskrcnn_up4conv_{,gn_}head
 
 # Mask-RCNN
 _C.MRCNN.HEAD_DIM = 256

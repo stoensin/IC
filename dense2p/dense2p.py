@@ -9,7 +9,7 @@ import tqdm
 import numpy as np
 import json
 import six
-import cPickle as pickle
+import pickle
 import pandas as pd
 import random
 import h5py
@@ -17,7 +17,7 @@ import pdb
 
 import tensorflow as tf
 from concurrent.futures import ThreadPoolExecutor
-from .config import model_cfg
+from config import model_cfg
 try:
     import horovod.tensorflow as hvd
 except ImportError:
@@ -31,7 +31,6 @@ from tensorpack.models import (
     Conv2D, FullyConnected, layer_register)
 import tensorpack.utils.viz as tpviz
 
-from region_detector.coco import COCODetection
 from region_detector.basemodel import (
     image_preprocess, resnet_c4_backbone, resnet_conv5,
     resnet_fpn_backbone)
@@ -49,14 +48,7 @@ from region_detector.model_cascade import CascadeRCNNHead
 from region_detector.model_box import (
     clip_boxes, crop_and_resize, roi_align, RPNAnchors)
 
-from visual_genome.dataset import (
-    get_train_dataflow, get_eval_dataflow,
-    get_all_anchors, get_all_anchors_fpn)
-from region_detector.viz import (
-    draw_annotation, draw_proposal_recall,
-    draw_predictions, draw_final_outputs)
-from region_detector.eval import (
-    eval_coco, detect_one_image, print_evaluation_scores, DetectionResult)
+
 from region_detector.config import finalize_configs, config as cfg
 
 assert six.PY3, "Please go Python 3!"
@@ -604,7 +596,7 @@ class Dense2pModel(object):
         elif self._mode == 'TEST':
             tf_feats, tf_generated_paragraph, tf_pred_re, tf_sentence_topic_vectors = _hierarchicalRNN_generate_layer(region_featurs)
 
-    def train_net(self, args):
+    def train_net(args):
 
         MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
 

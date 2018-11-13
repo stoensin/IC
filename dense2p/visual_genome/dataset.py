@@ -13,13 +13,13 @@ from tensorpack.dataflow import (
     MapDataComponent, DataFromList)
 from tensorpack.utils import logger
 
-from .vg_coco import COCODetection
-from dense2p.region_detector.utils.generate_anchors import generate_anchors
-from dense2p.region_detector.utils.np_box_ops import area as np_area
-from dense2p.region_detector.common import (
+from vg_coco import COCODetection
+from region_detector.utils.generate_anchors import generate_anchors
+from region_detector.utils.np_box_ops import area as np_area
+from region_detector.common import (
     DataFromListOfDict, CustomResize, filter_boxes_inside_shape,
     box_to_point8, point8_to_box, segmentation_to_mask)
-from dense2p.region_detector.config import config as cfg
+from region_detector.config import config as cfg
 
 try:
     import pycocotools.mask as cocomask
@@ -39,7 +39,7 @@ try:
         return ret.astype('float32')
 
 except ImportError:
-    from dense2p.region_detector.utils.np_box_ops import iou as np_iou
+    from region_detector.utils.np_box_ops import iou as np_iou
 
 
 class MalformedData(BaseException):
