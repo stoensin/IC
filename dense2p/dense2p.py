@@ -47,7 +47,9 @@ from region_detector.model_fpn import (
 from region_detector.model_cascade import CascadeRCNNHead
 from region_detector.model_box import (
     clip_boxes, crop_and_resize, roi_align, RPNAnchors)
-
+from visual_genome.dataset import (
+    get_train_dataflow, get_eval_dataflow,
+    get_all_anchors, get_all_anchors_fpn)
 
 from region_detector.config import finalize_configs, config as cfg
 
@@ -171,7 +173,7 @@ class ResNetC4Model(DetectionModel):
             total_cost = tf.add_n(all_losses, 'total_cost')
             add_moving_summary(total_cost, wd_cost)
 
-            final_cost = Dense2pModel.create_architecture('TRAIN', fastrcnn_head)
+            final_cost = Dense2pModel().create_architecture('TRAIN', fastrcnn_head)
             return final_cost
 
         else:
@@ -191,7 +193,7 @@ class ResNetC4Model(DetectionModel):
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx14x14
                 tf.sigmoid(final_mask_logits, name='output/masks')
 
-            Dense2pModel.create_architecture('TEST', fastrcnn_head)
+            Dense2pModel().create_architecture('TEST', fastrcnn_head)
 
 
 class ResNetFPNModel(DetectionModel):
@@ -311,7 +313,7 @@ class ResNetFPNModel(DetectionModel):
             total_cost = tf.add_n(all_losses, 'total_cost')
             add_moving_summary(total_cost, wd_cost)
 
-            final_cost = Dense2pModel.create_architecture('TRAIN', fastrcnn_head)
+            final_cost = Dense2pModel().create_architecture('TRAIN', fastrcnn_head)
             return final_cost
 
         else:
@@ -330,7 +332,7 @@ class ResNetFPNModel(DetectionModel):
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx28x28
                 tf.sigmoid(final_mask_logits, name='output/masks')
 
-            Dense2pModel.create_architecture('TRAIN', fastrcnn_head)
+            Dense2pModel().create_architecture('TRAIN', fastrcnn_head)
 
 
 class Dense2pModel(object):
@@ -586,15 +588,13 @@ class Dense2pModel(object):
         # 1. Pooling the visual features into a single dense feature
         # 2. Then, build sentence LSTM, word LSTM
 
-        self._mode = mode
-
-        if self._mode == 'TRAIN':
-            tf_feats, tf_num_distribution, tf_captions_matrix, tf_captions_masks, tf_loss, tf_loss_sent, tf_loss_word = _hierarchicalRNN_layer(region_featurs)
+        if mode == 'TRAIN':
+            tf_feats, tf_num_distribution, tf_captions_matrix, tf_captions_masks, tf_loss, tf_loss_sent, tf_loss_word = self._hierarchicalRNN_layer(region_featurs)
 
             return tf_loss
 
-        elif self._mode == 'TEST':
-            tf_feats, tf_generated_paragraph, tf_pred_re, tf_sentence_topic_vectors = _hierarchicalRNN_generate_layer(region_featurs)
+        elif mode == 'TEST':
+            tf_feats, tf_generated_paragraph, tf_pred_re, tf_sentence_topic_vectors = self._hierarchicalRNN_generate_layer(region_featurs)
 
     def train_net(args):
 
