@@ -58,7 +58,12 @@ class COCODetection(object):
             basedir, COCOMeta.INSTANCE_TO_BASEDIR.get(name, name)))
 
         assert os.path.isdir(self._imgdir), self._imgdir
-        annotation_file = '{}_sets.json'.format(tag)
+
+        annotation_file = 'visual_genome/{}_sets.json'.format(tag)
+        img2paras = open('visual_genome/img2paragraph_modify_batch', 'rb')
+        img2paras_data = pickle.load(img2paras)
+        img2paras.close()
+        self.paras = img2paras_data
 
         from pycocotools.coco import COCO
         self.coco = COCO(annotation_file)
@@ -139,6 +144,7 @@ class COCODetection(object):
         img['boxes'] = boxes        # nx4
         img['class'] = gt_classes          # cls n, always >0
         img['is_crowd'] = is_crowd  # is_crowd n,
+        img['sent_labels'] = self.paras[str(img['image_id'])]
 
     @staticmethod
     def load_many(basedir, names, add_gt=True, add_mask=False):

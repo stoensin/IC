@@ -53,8 +53,6 @@ from visual_genome.dataset import (
 
 from region_detector.config import finalize_configs, config as cfg
 
-assert six.PY3, "Please go Python 3!"
-
 
 class DetectionModel(ModelDesc):
     def preprocess(self, image):
@@ -94,7 +92,10 @@ class ResNetC4Model(DetectionModel):
             tf.placeholder(tf.int32, (None, None, cfg.RPN.NUM_ANCHOR), 'anchor_labels'),
             tf.placeholder(tf.float32, (None, None, cfg.RPN.NUM_ANCHOR, 4), 'anchor_boxes'),
             tf.placeholder(tf.float32, (None, 4), 'gt_boxes'),
-            tf.placeholder(tf.int64, (None,), 'gt_labels')]  # all > 0
+            tf.placeholder(tf.int64, (None,), 'gt_labels'),  # all > 0
+            tf.placeholder(tf.int32, (None, 6), 'num_distribution'),
+            tf.placeholder(tf.float32, (None, 6，51), 'captions_masks'),
+            tf.placeholder(tf.int32, (None, 6, 51), 'captions')]  # sentence_labels
         if cfg.MODE_MASK:
             ret.append(
                 tf.placeholder(tf.uint8, (None, None, None), 'gt_masks')
@@ -200,7 +201,10 @@ class ResNetFPNModel(DetectionModel):
 
     def inputs(self):
         ret = [
-            tf.placeholder(tf.float32, (None, None, 3), 'image')]
+            tf.placeholder(tf.float32, (None, None, 3), 'image'),
+            tf.placeholder(tf.int32, (None, 6), 'num_distribution'),
+            tf.placeholder(tf.float32, (None, 6，51), 'captions_masks'),
+            tf.placeholder(tf.int32, (None, 6, 51), 'captions')]  # sentence_labels
         num_anchors = len(cfg.RPN.ANCHOR_RATIOS)
         for k in range(len(cfg.FPN.ANCHOR_STRIDES)):
             ret.extend([
@@ -210,7 +214,7 @@ class ResNetFPNModel(DetectionModel):
                                'anchor_boxes_lvl{}'.format(k + 2))])
         ret.extend([
             tf.placeholder(tf.float32, (None, 4), 'gt_boxes'),
-            tf.placeholder(tf.int64, (None,), 'gt_labels')])  # all > 0
+            tf.placeholder(tf.int64, (None,), 'gt_labels')])
         if cfg.MODE_MASK:
             ret.append(
                 tf.placeholder(tf.uint8, (None, None, None), 'gt_masks')

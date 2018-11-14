@@ -35,9 +35,6 @@ def parse_args():
 def main():
 
     args = parse_args()
-    print('------ called with args: -------')
-    pprint.pprint(args)
-
     Dense2pModel.train_net(args=args)
 
 

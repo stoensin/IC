@@ -314,7 +314,7 @@ def get_train_dataflow():
          imgaug.Flip(horiz=True)])
 
     def preprocess(roidb):
-        fname, boxes, klass, is_crowd = roidb['path'], roidb['boxes'], roidb['class'], roidb['is_crowd']
+        fname, boxes, klass, is_crowd, sent_labels = roidb['path'], roidb['boxes'], roidb['class'], roidb['is_crowd'], roidb['sent_labels']
         boxes = np.copy(boxes)
         im = cv2.imread(fname, cv2.IMREAD_COLOR)
         assert im is not None, fname
@@ -349,10 +349,9 @@ def get_train_dataflow():
             log_once("Input {} is filtered for training: {}".format(fname, str(e)), 'warn')
             return None
 
-        img2paras = open('img2paragraph_modify_batch', 'rb')
-        img2paras_data = pickle.load(img2paras)
-        img2paras.close()
-        ret['sent_labels'] = img2paras_data
+        ret['num_distribution'] = sent_labels[0]
+        ret['captions_masks'] = np.zeros((6, 31))
+        ret['captions'] = sent_labels[1]
         return ret
 
     if cfg.TRAINER == 'horovod':
