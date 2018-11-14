@@ -339,7 +339,7 @@ class ResNetFPNModel(DetectionModel):
             Dense2pModel().create_architecture('TRAIN', fastrcnn_head)
 
 
-class Dense2pModel(object):
+class Dense2pModel(ModelDesc):
 
     def __init__(self):
 
@@ -373,26 +373,26 @@ class Dense2pModel(object):
 
         # embedding shape: n_words x wordRNN_lstm_dim
         with tf.device('/cpu:0'):
-            self.Wemb = tf.Variable(tf.random_uniform([self.n_words, self.word_embed_dim], -0.1, 0.1), name='Wemb')
+            self.Wemb = tf.get_variable('Wemb', tf.random_uniform([self.n_words, self.word_embed_dim], -0.1, 0.1))
 
         # regionPooling_W shape: 4096 x 1024
         # regionPooling_b shape: 1024
-        self.regionPooling_W = tf.Variable(tf.random_uniform([self.feats_dim, self.project_dim], -0.1, 0.1), name='regionPooling_W')
-        self.regionPooling_b = tf.Variable(tf.zeros([self.project_dim]), name='regionPooling_b')
+        self.regionPooling_W = tf.get_variable('regionPooling_W', tf.random_uniform([self.feats_dim, self.project_dim], -0.1, 0.1))
+        self.regionPooling_b = tf.get_variable('regionPooling_b', tf.zeros([self.project_dim]))
 
         # sentence LSTM
         self.sentence_LSTM = tf.nn.rnn_cell.BasicLSTMCell(self.sentRNN_lstm_dim, state_is_tuple=True)
 
         # logistic classifier
-        self.logistic_Theta_W = tf.Variable(tf.random_uniform([self.sentRNN_lstm_dim, 2], -0.1, 0.1), name='logistic_Theta_W')
-        self.logistic_Theta_b = tf.Variable(tf.zeros(2), name='logistic_Theta_b')
+        self.logistic_Theta_W = tf.get_variable('logistic_Theta_W', tf.random_uniform([self.sentRNN_lstm_dim, 2], -0.1, 0.1))
+        self.logistic_Theta_b = tf.get_variable('logistic_Theta_b', tf.zeros(2))
 
         # fc1_W: 512 x 1024, fc1_b: 1024
         # fc2_W: 1024 x 1024, fc2_b: 1024
-        self.fc1_W = tf.Variable(tf.random_uniform([self.sentRNN_lstm_dim, self.sentRNN_FC_dim], -0.1, 0.1), name='fc1_W')
-        self.fc1_b = tf.Variable(tf.zeros(self.sentRNN_FC_dim), name='fc1_b')
-        self.fc2_W = tf.Variable(tf.random_uniform([self.sentRNN_FC_dim, 1024], -0.1, 0.1), name='fc2_W')
-        self.fc2_b = tf.Variable(tf.zeros(1024), name='fc2_b')
+        self.fc1_W = tf.get_variable('fc1_W', tf.random_uniform([self.sentRNN_lstm_dim, self.sentRNN_FC_dim], -0.1, 0.1))
+        self.fc1_b = tf.get_variable('fc1_b', tf.zeros(self.sentRNN_FC_dim))
+        self.fc2_W = tf.get_variable('fc2_W', tf.random_uniform([self.sentRNN_FC_dim, 1024], -0.1, 0.1))
+        self.fc2_b = tf.get_variable('fc2_b', tf.zeros(1024))
 
         # word LSTM
         def wordLSTM():
@@ -401,14 +401,14 @@ class Dense2pModel(object):
 
         self.word_LSTM = tf.nn.rnn_cell.MultiRNNCell([wordLSTM() for _ in range(2)], state_is_tuple=True)
 
-        self.embed_word_W = tf.Variable(tf.random_uniform([self.wordRNN_lstm_dim, self.n_words], -0.1, 0.1), name='embed_word_W')
+        self.embed_word_W = tf.get_variable('embed_word_W', tf.random_uniform([self.wordRNN_lstm_dim, self.n_words], -0.1, 0.1))
 
         tf.get_variable_scope().reuse_variables()
 
         if bias_init_vector is not None:
-            self.embed_word_b = tf.Variable(bias_init_vector.astype(np.float32), name='embed_word_b')
+            self.embed_word_b = tf.get_variable('embed_word_b', bias_init_vector.astype(np.float32))
         else:
-            self.embed_word_b = tf.Variable(tf.zeros([self.n_words]), name='embed_word_b')
+            self.embed_word_b = tf.get_variable('embed_word_b', tf.zeros([self.n_words]))
 
     def recognitionNetwork_layer(self, regions, feature_dim=4096):
         # Produces each region of rois to dimension 4096
@@ -437,7 +437,6 @@ class Dense2pModel(object):
         # receive the [continue:0, stop:1] lists
         # example: [0, 0, 0, 0, 1, 1], it means this paragraph has five sentences
         num_distribution = tf.placeholder(tf.int32, [self.batch_size, self.S_max])
-
         # receive the ground truth words, which has been changed to idx use word2idx function
         captions = tf.placeholder(tf.int32, [self.batch_size, self.S_max, self.N_max+1])
         captions_masks = tf.placeholder(tf.float32, [self.batch_size, self.S_max, self.N_max+1])
@@ -640,7 +639,6 @@ class Dense2pModel(object):
                 PeriodicCallback(
                     ModelSaver(max_to_keep=10, keep_checkpoint_every_n_hours=1),
                     every_k_epochs=20),
-                # linear warmup
                 ScheduledHyperParamSetter(
                     'learning_rate', warmup_schedule, interp='linear', step_based=True),
                 ScheduledHyperParamSetter('learning_rate', lr_schedule),
