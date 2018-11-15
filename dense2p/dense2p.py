@@ -17,7 +17,6 @@ import pdb
 
 import tensorflow as tf
 from concurrent.futures import ThreadPoolExecutor
-from config import model_cfg
 try:
     import horovod.tensorflow as hvd
 except ImportError:
@@ -34,8 +33,8 @@ import tensorpack.utils.viz as tpviz
 from region_detector.basemodel import (
     image_preprocess, resnet_c4_backbone, resnet_conv5,
     resnet_fpn_backbone)
-import region_detector.model_frcnn
-import region_detector.model_mrcnn
+import region_detector.model_frcnn as model_frcnn
+import region_detector.model_mrcnn as model_mrcnn
 from region_detector.model_frcnn import (
     sample_fast_rcnn_targets, fastrcnn_outputs,
     fastrcnn_predictions, BoxProposals, FastRCNNHead)
@@ -94,7 +93,7 @@ class ResNetC4Model(DetectionModel):
             tf.placeholder(tf.float32, (None, 4), 'gt_boxes'),
             tf.placeholder(tf.int64, (None,), 'gt_labels'),  # all > 0
             tf.placeholder(tf.int32, (None, 6), 'num_distribution'),
-            tf.placeholder(tf.float32, (None, 6，51), 'captions_masks'),
+            tf.placeholder(tf.float32, (None, 6, 51), 'captions_masks'),
             tf.placeholder(tf.int32, (None, 6, 51), 'captions')]  # sentence_labels
         if cfg.MODE_MASK:
             ret.append(
@@ -174,7 +173,7 @@ class ResNetC4Model(DetectionModel):
             total_cost = tf.add_n(all_losses, 'total_cost')
             add_moving_summary(total_cost, wd_cost)
 
-            final_cost = Dense2pModel().create_architecture('TRAIN', fastrcnn_head)
+            final_cost = Dense2pModel().create_architecture('TRAIN', fastrcnn_head, inputs)
             return final_cost
 
         else:
@@ -194,7 +193,7 @@ class ResNetC4Model(DetectionModel):
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx14x14
                 tf.sigmoid(final_mask_logits, name='output/masks')
 
-            Dense2pModel().create_architecture('TEST', fastrcnn_head)
+            # Dense2pModel().create_architecture('TEST', fastrcnn_head)
 
 
 class ResNetFPNModel(DetectionModel):
@@ -203,7 +202,7 @@ class ResNetFPNModel(DetectionModel):
         ret = [
             tf.placeholder(tf.float32, (None, None, 3), 'image'),
             tf.placeholder(tf.int32, (None, 6), 'num_distribution'),
-            tf.placeholder(tf.float32, (None, 6，51), 'captions_masks'),
+            tf.placeholder(tf.float32, (None, 6, 51), 'captions_masks'),
             tf.placeholder(tf.int32, (None, 6, 51), 'captions')]  # sentence_labels
         num_anchors = len(cfg.RPN.ANCHOR_RATIOS)
         for k in range(len(cfg.FPN.ANCHOR_STRIDES)):
@@ -317,7 +316,7 @@ class ResNetFPNModel(DetectionModel):
             total_cost = tf.add_n(all_losses, 'total_cost')
             add_moving_summary(total_cost, wd_cost)
 
-            final_cost = Dense2pModel().create_architecture('TRAIN', fastrcnn_head)
+            final_cost = Dense2pModel().create_architecture('TRAIN', head_feature, inputs)
             return final_cost
 
         else:
@@ -336,7 +335,7 @@ class ResNetFPNModel(DetectionModel):
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx28x28
                 tf.sigmoid(final_mask_logits, name='output/masks')
 
-            Dense2pModel().create_architecture('TRAIN', fastrcnn_head)
+            # Dense2pModel().create_architecture('TRAIN', head_feature)
 
 
 class Dense2pModel(ModelDesc):
@@ -373,26 +372,33 @@ class Dense2pModel(ModelDesc):
 
         # embedding shape: n_words x wordRNN_lstm_dim
         with tf.device('/cpu:0'):
-            self.Wemb = tf.get_variable('Wemb', tf.random_uniform([self.n_words, self.word_embed_dim], -0.1, 0.1))
+            with tf.variable_scope('Wemb'):
+                self.Wemb = tf.random_uniform([self.n_words, self.word_embed_dim], -0.1, 0.1)
 
         # regionPooling_W shape: 4096 x 1024
         # regionPooling_b shape: 1024
-        self.regionPooling_W = tf.get_variable('regionPooling_W', tf.random_uniform([self.feats_dim, self.project_dim], -0.1, 0.1))
-        self.regionPooling_b = tf.get_variable('regionPooling_b', tf.zeros([self.project_dim]))
+        with tf.variable_scope('regionPooling_W'):
+            self.regionPooling_W = tf.random_uniform([self.feats_dim, self.project_dim], -0.1, 0.1)
+        with tf.variable_scope('regionPooling_b'):
+            self.regionPooling_b = tf.zeros([self.project_dim])
 
         # sentence LSTM
         self.sentence_LSTM = tf.nn.rnn_cell.BasicLSTMCell(self.sentRNN_lstm_dim, state_is_tuple=True)
 
         # logistic classifier
-        self.logistic_Theta_W = tf.get_variable('logistic_Theta_W', tf.random_uniform([self.sentRNN_lstm_dim, 2], -0.1, 0.1))
-        self.logistic_Theta_b = tf.get_variable('logistic_Theta_b', tf.zeros(2))
+        with tf.variable_scope('logistic_Theta_W'):
+            self.logistic_Theta_W = tf.random_uniform([self.sentRNN_lstm_dim, 2], -0.1, 0.1)
+        with tf.variable_scope('logistic_Theta_b'):
+            self.logistic_Theta_b = tf.zeros(2)
 
         # fc1_W: 512 x 1024, fc1_b: 1024
         # fc2_W: 1024 x 1024, fc2_b: 1024
-        self.fc1_W = tf.get_variable('fc1_W', tf.random_uniform([self.sentRNN_lstm_dim, self.sentRNN_FC_dim], -0.1, 0.1))
-        self.fc1_b = tf.get_variable('fc1_b', tf.zeros(self.sentRNN_FC_dim))
-        self.fc2_W = tf.get_variable('fc2_W', tf.random_uniform([self.sentRNN_FC_dim, 1024], -0.1, 0.1))
-        self.fc2_b = tf.get_variable('fc2_b', tf.zeros(1024))
+        with tf.variable_scope('sentlstm_fc1'):
+            self.fc1_W = tf.random_uniform([self.sentRNN_lstm_dim, self.sentRNN_FC_dim], -0.1, 0.1)
+            self.fc1_b = tf.zeros(self.sentRNN_FC_dim)
+        with tf.variable_scope('sentlstm_fc2'):
+            self.fc2_W = tf.random_uniform([self.sentRNN_FC_dim, 1024], -0.1, 0.1)
+            self.fc2_b = tf.zeros(1024)
 
         # word LSTM
         def wordLSTM():
@@ -400,30 +406,16 @@ class Dense2pModel(ModelDesc):
             return lstm
 
         self.word_LSTM = tf.nn.rnn_cell.MultiRNNCell([wordLSTM() for _ in range(2)], state_is_tuple=True)
+        with tf.variable_scope('embed_word_W'):
+            self.embed_word_W = tf.random_uniform([self.wordRNN_lstm_dim, self.n_words], -0.1, 0.1)
 
-        self.embed_word_W = tf.get_variable('embed_word_W', tf.random_uniform([self.wordRNN_lstm_dim, self.n_words], -0.1, 0.1))
-
-        tf.get_variable_scope().reuse_variables()
-
-        if bias_init_vector is not None:
-            self.embed_word_b = tf.get_variable('embed_word_b', bias_init_vector.astype(np.float32))
+        if self.bias_init_vector is not None:
+            self.embed_word_b = self.bias_init_vector.astype(np.float32)
         else:
-            self.embed_word_b = tf.get_variable('embed_word_b', tf.zeros([self.n_words]))
+            self.embed_word_b = tf.zeros([self.n_words])
 
-    def recognitionNetwork_layer(self, regions, feature_dim=4096):
-        # Produces each region of rois to dimension 4096
-        fc1 = FullyConnected(
-            'recognition', regions, feature_dim, activation=tf.nn.relu,
-            kernel_initializer=tf.random_normal_initializer(stddev=0.01))
-        fc1_dropout = Dropout('dropout', fc1, 0.5, training=get_current_tower_context().is_training)
-        fc2 = FullyConnected(
-            'recognition', fc1fc1_dropout, feature_dim, activation=tf.nn.relu,
-            kernel_initializer=tf.random_normal_initializer(stddev=0.01))
-        fc2_dropout = Dropout('dropout', fc2, 0.5, training=get_current_tower_context().is_training)
-        return fc2_dropout
-
-    def _hierarchicalRNN_layer(self, region_featurs):
-        # region_featurs's shape is 8 x 50 x 4096
+    def _hierarchicalRNN_layer(self, region_featurs, inputs):
+        # region_featurs's shape is 10 x 50 x 4096
         # tmp_feats: 500 x 4096
         # feats = tf.placeholder(tf.float32, [self.batch_size, self.num_boxes, self.feats_dim])
         feats = region_featurs
@@ -436,10 +428,10 @@ class Dense2pModel(ModelDesc):
 
         # receive the [continue:0, stop:1] lists
         # example: [0, 0, 0, 0, 1, 1], it means this paragraph has five sentences
-        num_distribution = tf.placeholder(tf.int32, [self.batch_size, self.S_max])
+        num_distribution = inputs['num_distribution']  # tf.placeholder(tf.int32, [self.batch_size, self.S_max])
         # receive the ground truth words, which has been changed to idx use word2idx function
-        captions = tf.placeholder(tf.int32, [self.batch_size, self.S_max, self.N_max+1])
-        captions_masks = tf.placeholder(tf.float32, [self.batch_size, self.S_max, self.N_max+1])
+        captions = inputs['captions']  # tf.placeholder(tf.int32, [self.batch_size, self.S_max, self.N_max+1])
+        captions_masks = inputs['captions_masks']  # tf.placeholder(tf.float32, [self.batch_size, self.S_max, self.N_max+1])
 
         sentence_state = self.sentence_LSTM.zero_state(batch_size=self.batch_size, dtype=tf.float32)
 
@@ -455,9 +447,6 @@ class Dense2pModel(ModelDesc):
         # The word RNN has the max number, N_max = 50, the number in the papar is 50
         # ----------------------------------------------------------------------------------------------
         for i in range(0, self.S_max):
-
-            if i > 0:
-                tf.get_variable_scope().reuse_variables()
 
             with tf.variable_scope('sentence_LSTM', reuse=tf.AUTO_REUSE):
                 sentence_output, sentence_state = self.sentence_LSTM(project_vec, sentence_state)
@@ -484,8 +473,6 @@ class Dense2pModel(ModelDesc):
             word_state = (topic, topic)
             # tf.reset_default_graph()
             for j in range(0, self.N_max):
-                if j > 0:
-                    tf.get_variable_scope().reuse_variables()
 
                 with tf.device('/cpu:0'):
                     current_embed = tf.nn.embedding_lookup(self.Wemb, captions[:, i, j])
@@ -534,8 +521,6 @@ class Dense2pModel(ModelDesc):
 
         # sentence RNN
         for i in range(0, self.S_max):
-            if i > 0:
-                tf.get_variable_scope().reuse_variables()
 
             # sentence_state:
             # LSTMStateTuple(c=<tf.Tensor 'sentence_LSTM/BasicLSTMCell/add_2:0' shape=(1, 512) dtype=float32>,
@@ -563,8 +548,6 @@ class Dense2pModel(ModelDesc):
             word_state = (topic, topic)
             # word RNN, unrolled to N_max time steps
             for j in range(0, self.N_max):
-                if j > 0:
-                    tf.get_variable_scope().reuse_variables()
 
                 if j == 0:
                     with tf.device('/cpu:0'):
@@ -587,12 +570,12 @@ class Dense2pModel(ModelDesc):
 
         return feats, generated_paragraph, pred_re, generated_sent
 
-    def create_architecture(self, mode, region_featurs):
+    def create_architecture(self, mode, region_featurs, inputs):
         # 1. Pooling the visual features into a single dense feature
         # 2. Then, build sentence LSTM, word LSTM
 
         if mode == 'TRAIN':
-            tf_feats, tf_num_distribution, tf_captions_matrix, tf_captions_masks, tf_loss, tf_loss_sent, tf_loss_word = self._hierarchicalRNN_layer(region_featurs)
+            tf_feats, tf_num_distribution, tf_captions_matrix, tf_captions_masks, tf_loss, tf_loss_sent, tf_loss_word = self._hierarchicalRNN_layer(region_featurs, inputs)
 
             return tf_loss
 

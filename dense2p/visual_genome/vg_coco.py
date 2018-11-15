@@ -99,6 +99,7 @@ class COCODetection(object):
             imgs = self.coco.loadImgs(img_ids)
 
             for img in tqdm.tqdm(imgs):
+                img['path'] = os.path.join(self._imgdir, img['path'])
                 if add_gt:
                     self._add_detection_gt(img, add_mask)
             return imgs

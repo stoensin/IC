@@ -285,7 +285,7 @@ def fastrcnn_Xconv1fc_head(feature, num_convs, norm=None):
             l = Conv2D('conv{}'.format(k), l, cfg.FPN.FRCNN_CONV_HEAD_DIM, 3, activation=tf.nn.relu)
             if norm is not None:
                 l = GroupNorm('gn{}'.format(k), l)
-        l = FullyConnected('fc', l, cfg.FPN.FRCNN_FC_HEAD_DIM,
+        l = FullyConnected('fc_x2046', l, cfg.FPN.FRCNN_FC_HEAD_DIM,
                            kernel_initializer=tf.variance_scaling_initializer(), activation=tf.nn.relu)
     return l
 
@@ -302,6 +302,7 @@ class BoxProposals(object):
     """
     A structure to manage box proposals and their relations with ground truth.
     """
+
     def __init__(self, boxes,
                  labels=None, fg_inds_wrt_gt=None,
                  gt_boxes=None, gt_labels=None):
@@ -344,6 +345,7 @@ class FastRCNNHead(object):
     """
     A class to process & decode inputs/outputs of a fastrcnn classification+regression head.
     """
+
     def __init__(self, proposals, box_logits, label_logits, bbox_regression_weights):
         """
         Args:

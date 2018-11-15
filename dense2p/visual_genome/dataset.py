@@ -13,7 +13,7 @@ from tensorpack.dataflow import (
     MapDataComponent, DataFromList)
 from tensorpack.utils import logger
 
-from vg_coco import COCODetection
+from .vg_coco import COCODetection
 from region_detector.utils.generate_anchors import generate_anchors
 from region_detector.utils.np_box_ops import area as np_area
 from region_detector.common import (
@@ -349,9 +349,9 @@ def get_train_dataflow():
             log_once("Input {} is filtered for training: {}".format(fname, str(e)), 'warn')
             return None
 
-        ret['num_distribution'] = sent_labels[0]
-        ret['captions_masks'] = np.zeros((6, 31))
-        ret['captions'] = sent_labels[1]
+        ret['num_distribution'] = np.expand_dims(sent_labels[0], 0)
+        ret['captions_masks'] = np.zeros((1, 6, 31))
+        ret['captions'] = np.expand_dims(sent_labels[1], 0)
         return ret
 
     if cfg.TRAINER == 'horovod':
