@@ -350,7 +350,7 @@ def get_train_dataflow():
             return None
 
         ret['num_distribution'] = np.expand_dims(sent_labels[0], 0)
-        ret['captions_masks'] = np.zeros((1, 6, 31))
+        ret['captions_masks'] = np.zeros((1, 6, 51))
         ret['captions'] = np.expand_dims(sent_labels[1], 0)
         return ret
 

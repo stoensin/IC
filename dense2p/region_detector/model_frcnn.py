@@ -21,7 +21,6 @@ from .config import config as cfg
 def proposal_metrics(iou):
     """
     Add summaries for RPN proposals.
-
     Args:
         iou: nxm, #proposal x #gt
     """
@@ -42,14 +41,12 @@ def proposal_metrics(iou):
 @under_name_scope()
 def sample_fast_rcnn_targets(boxes, gt_boxes, gt_labels):
     """
-    Sample some ROIs from all proposals for training.
-    #fg is guaranteed to be > 0, because grount truth boxes are added as RoIs.
-
+    Sample some boxes from all proposals for training.
+    #fg is guaranteed to be > 0, because ground truth boxes will be added as proposals.
     Args:
         boxes: nx4 region proposals, floatbox
         gt_boxes: mx4, floatbox
         gt_labels: m, int32
-
     Returns:
         A BoxProposals instance.
         sampled_boxes: tx4 floatbox, the rois
@@ -110,7 +107,6 @@ def fastrcnn_outputs(feature, num_classes, class_agnostic_regression=False):
         feature (any shape):
         num_classes(int): num_category + 1
         class_agnostic_regression (bool): if True, regression to N x 1 x 4
-
     Returns:
         cls_logits: N x num_class classification logits
         reg_logits: N x num_classx4 or Nx2x4 if class agnostic
@@ -123,7 +119,7 @@ def fastrcnn_outputs(feature, num_classes, class_agnostic_regression=False):
         'box', feature, num_classes_for_box * 4,
         kernel_initializer=tf.random_normal_initializer(stddev=0.001))
     box_regression = tf.reshape(box_regression, (-1, num_classes_for_box, 4), name='output_box')
-    return classification, box_regression
+    return feature, classification, box_regression
 
 
 @under_name_scope()
@@ -134,7 +130,6 @@ def fastrcnn_losses(labels, label_logits, fg_boxes, fg_box_logits):
         label_logits: nxC
         fg_boxes: nfgx4, encoded
         fg_box_logits: nfgxCx4 or nfgx1x4 if class agnostic
-
     Returns:
         label_loss, box_loss
     """
@@ -178,11 +173,9 @@ def fastrcnn_losses(labels, label_logits, fg_boxes, fg_box_logits):
 def fastrcnn_predictions(boxes, scores):
     """
     Generate final results from predictions of all proposals.
-
     Args:
         boxes: n#classx4 floatbox in float32
         scores: nx#class
-
     Returns:
         boxes: Kx4
         scores: K
@@ -198,7 +191,6 @@ def fastrcnn_predictions(boxes, scores):
         """
         prob: n probabilities
         box: nx4 boxes
-
         Returns: n boolean, the selection
         """
         prob, box = X
@@ -253,7 +245,6 @@ def fastrcnn_2fc_head(feature):
     """
     Args:
         feature (any shape):
-
     Returns:
         2D head feature
     """
@@ -272,7 +263,6 @@ def fastrcnn_Xconv1fc_head(feature, num_convs, norm=None):
         num_classes(int): num_category + 1
         num_convs (int): number of conv layers
         norm (str or None): either None or 'GN'
-
     Returns:
         2D head feature
     """
@@ -285,7 +275,7 @@ def fastrcnn_Xconv1fc_head(feature, num_convs, norm=None):
             l = Conv2D('conv{}'.format(k), l, cfg.FPN.FRCNN_CONV_HEAD_DIM, 3, activation=tf.nn.relu)
             if norm is not None:
                 l = GroupNorm('gn{}'.format(k), l)
-        l = FullyConnected('fc_x2046', l, cfg.FPN.FRCNN_FC_HEAD_DIM,
+        l = FullyConnected('fc', l, cfg.FPN.FRCNN_FC_HEAD_DIM,
                            kernel_initializer=tf.variance_scaling_initializer(), activation=tf.nn.relu)
     return l
 
@@ -313,7 +303,6 @@ class BoxProposals(object):
             fg_inds_wrt_gt: #fg, each in [0, M)
             gt_boxes: Mx4
             gt_labels: M
-
         The last four arguments could be None when not training.
         """
         for k, v in locals().items():

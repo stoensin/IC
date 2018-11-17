@@ -273,9 +273,9 @@ class ResNetFPNModel(DetectionModel):
         if not cfg.FPN.CASCADE:
             roi_feature_fastrcnn = multilevel_roi_align(p23456[:4], proposals.boxes, 7)
 
-            head_feature = fastrcnn_head_func('fastrcnn', roi_feature_fastrcnn)
-            fastrcnn_label_logits, fastrcnn_box_logits = fastrcnn_outputs(
-                'fastrcnn/outputs', head_feature, cfg.DATA.NUM_CLASS)
+            head_feature = fastrcnn_head_func('fastrcnn_x', roi_feature_fastrcnn)
+            rois, fastrcnn_label_logits, fastrcnn_box_logits = fastrcnn_outputs(
+                'fastrcnn_x/outputs', head_feature, cfg.DATA.NUM_CLASS)
             fastrcnn_head = FastRCNNHead(proposals, fastrcnn_box_logits, fastrcnn_label_logits,
                                          tf.constant(cfg.FRCNN.BBOX_REG_WEIGHTS, dtype=tf.float32))
         else:
@@ -316,7 +316,7 @@ class ResNetFPNModel(DetectionModel):
             total_cost = tf.add_n(all_losses, 'total_cost')
             add_moving_summary(total_cost, wd_cost)
 
-            final_cost = Dense2pModel().create_architecture('TRAIN', head_feature, inputs)
+            final_cost = Dense2pModel().create_architecture('TRAIN', rois, inputs)
             return final_cost
 
         else:
