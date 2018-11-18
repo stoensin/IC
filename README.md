@@ -10,7 +10,7 @@
 
 > provide the server of image caption model
 
-### FOLDER: im2txt
+### FOLDER: dense2p
 
 
-> the model of image catpion
+> the model of dense catpion to paragraph
