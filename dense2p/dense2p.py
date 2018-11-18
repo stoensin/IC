@@ -137,7 +137,7 @@ class ResNetC4Model(DetectionModel):
         feature_fastrcnn = resnet_conv5(roi_resized, cfg.BACKBONE.RESNET_NUM_BLOCK[-1])    # nxcx7x7
         # Keep C5 feature to be shared with mask branch
         feature_gap = GlobalAvgPooling('gap', feature_fastrcnn, data_format='channels_first')
-        fastrcnn_label_logits, fastrcnn_box_logits = fastrcnn_outputs('fastrcnn', feature_gap, cfg.DATA.NUM_CLASS)
+        rois, fastrcnn_label_logits, fastrcnn_box_logits = fastrcnn_outputs('fastrcnn', feature_gap, cfg.DATA.NUM_CLASS)
 
         fastrcnn_head = FastRCNNHead(proposals, fastrcnn_box_logits, fastrcnn_label_logits,
                                      tf.constant(cfg.FRCNN.BBOX_REG_WEIGHTS, dtype=tf.float32))
@@ -173,7 +173,7 @@ class ResNetC4Model(DetectionModel):
             total_cost = tf.add_n(all_losses, 'total_cost')
             add_moving_summary(total_cost, wd_cost)
 
-            final_cost = Dense2pModel().create_architecture('TRAIN', fastrcnn_head, inputs)
+            final_cost = Dense2pModel().create_architecture('TRAIN', rois, inputs)
             return final_cost
 
         else:
