@@ -169,7 +169,7 @@ _C.FPN.NORM = 'GN'  # 'None', 'GN'
 _C.FPN.FRCNN_HEAD_FUNC = 'fastrcnn_4conv1fc_gn_head'
 # choices: fastrcnn_2fc_head, fastrcnn_4conv1fc_{,gn_}head
 _C.FPN.FRCNN_CONV_HEAD_DIM = 256
-_C.FPN.FRCNN_FC_HEAD_DIM = 4096  # 1024
+_C.FPN.FRCNN_FC_HEAD_DIM = 1024  # 1024
 _C.FPN.MRCNN_HEAD_FUNC = 'maskrcnn_up4conv_gn_head'   # choices: maskrcnn_up4conv_{,gn_}head
 
 # Mask-RCNN
