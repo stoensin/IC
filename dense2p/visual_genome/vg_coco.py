@@ -122,7 +122,8 @@ class COCODetection(object):
         for i, obj in enumerate(objs):
             if obj.get('ignore', 0) == 1:
                 continue
-            x1, y1, w, h = obj['bbox']
+            # x1, y1, w, h = obj['bbox']
+            x1, y1, w, h = obj['x'], obj['y'], obj['width'], obj['height']
             # bbox is originally in float
             # x1/y1 means upper-left corner and w/h means true w/h. This can be verified by segmentation pixels.
             # But we do make an assumption here that (0.0, 0.0) is upper-left corner of the first pixel

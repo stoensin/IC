@@ -171,10 +171,13 @@ class ResNetC4Model(DetectionModel):
             all_losses.append(wd_cost)
 
             total_cost = tf.add_n(all_losses, 'total_cost')
-            add_moving_summary(total_cost, wd_cost)
+            # add_moving_summary(total_cost, wd_cost)
 
-            final_cost = Dense2pModel().create_architecture('TRAIN', rois, inputs)
-            return final_cost
+            dense2p_loss = Dense2pModel()._hierarchicalRNN_layer(rois, inputs)
+            final_loss = tf.identity(dense2p_loss, name="dense2p_loss")
+
+            add_moving_summary(total_cost, final_loss)
+            return final_loss
 
         else:
 
@@ -193,7 +196,7 @@ class ResNetC4Model(DetectionModel):
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx14x14
                 tf.sigmoid(final_mask_logits, name='output/masks')
 
-            # Dense2pModel().create_architecture('TEST', fastrcnn_head)
+            # Dense2pModel().create_architecture('TEST', rois, inputs)
 
 
 class ResNetFPNModel(DetectionModel):
@@ -335,31 +338,18 @@ class ResNetFPNModel(DetectionModel):
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx28x28
                 tf.sigmoid(final_mask_logits, name='output/masks')
 
-            # Dense2pModel().create_architecture('TRAIN', head_feature)
+            # Dense2pModel().create_architecture('TEST', rois, inputs)
 
 
 class Dense2pModel(ModelDesc):
 
     def __init__(self):
 
-        self._predictions = {}
-        self._losses = {}
-        self._anchor_targets = {}
-        self._proposal_targets = {}
-        self._layers = {}
-        self._gt_image = None
-        self._act_summaries = []
-        self._score_summaries = {}
-        self._train_summaries = []
-        self._event_summaries = {}
-        self._variables_to_fix = {}
-        self._mode = None
-
         # FOR RegionPooling_HierarchicalRNN
-        self.n_words = 1
-        self.batch_size = 8
-        self.num_boxes = 50  # 50
-        self.feats_dim = 4096  # 4096
+        self.n_words = 9904
+        self.batch_size = 1
+        self.num_boxes = 32  # 50
+        self.feats_dim = 2048  # 4096
         self.project_dim = 1024  # 1024
         self.S_max = 6  # 6
         self.N_max = 50  # 50
@@ -415,19 +405,23 @@ class Dense2pModel(ModelDesc):
             self.embed_word_b = tf.zeros([self.n_words])
 
     def _hierarchicalRNN_layer(self, region_featurs, inputs):
-        # region_featurs's shape is 10 x 50 x 4096
-        # tmp_feats: 500 x 4096
+        # region_featurs's shape is 50 x 4096
+        # tmp_feats: 50 x 4096
         # feats = tf.placeholder(tf.float32, [self.batch_size, self.num_boxes, self.feats_dim])
         feats = region_featurs
-        tmp_feats = tf.reshape(feats, [-1, self.feats_dim])
 
-        # project_vec_all: 500 x 4096 * 4096 x 1024 --> 500 x 1024 ; project_vec: 10 x 1024
-        project_vec_all = tf.matmul(tmp_feats, self.regionPooling_W) + self.regionPooling_b
-        project_vec_all = tf.reshape(project_vec_all, [self.batch_size, 50, self.project_dim])
-        project_vec = tf.reduce_max(project_vec_all, reduction_indices=1)
+        # project_vec_all: 50 x 4096 * 4096 x 1024 --> 50 x 1024 ; project_vec: 10 x 1024
+        with tf.name_scope('project_vec_all'):
+            project_vec_all = tf.matmul(feats, self.regionPooling_W) + self.regionPooling_b
 
-        # receive the [continue:0, stop:1] lists
-        # example: [0, 0, 0, 0, 1, 1], it means this paragraph has five sentences
+        # project_vec_all.set_shape([None,1024])
+        project_vec_alls = tf.expand_dims(project_vec_all, 0)  # tf.reshape(project_vec_all, [1, 16, 1024])
+        # project_vec_alls.set_shape([1,None,1024])
+
+        with tf.name_scope('project_vec'):
+            project_vec = tf.reduce_max(project_vec_alls, reduction_indices=1)
+
+        # receive the [continue:0, stop:1] lists  example: [0, 0, 0, 0, 1, 1], it means this paragraph has five sentences
         num_distribution = inputs['num_distribution']  # tf.placeholder(tf.int32, [self.batch_size, self.S_max])
         # receive the ground truth words, which has been changed to idx use word2idx function
         captions = inputs['captions']  # tf.placeholder(tf.int32, [self.batch_size, self.S_max, self.N_max+1])
@@ -462,7 +456,7 @@ class Dense2pModel(ModelDesc):
             sentRNN_label = tf.stack([1 - num_distribution[:, i], num_distribution[:, i]])
             sentRNN_label = tf.transpose(sentRNN_label)
 
-            sentRNN_loss = tf.nn.softmax_cross_entropy_with_logits(labels=sentRNN_label, logits=sentRNN_logistic_mu)
+            sentRNN_loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=sentRNN_label, logits=sentRNN_logistic_mu)
             sentRNN_loss = tf.reduce_sum(sentRNN_loss)/self.batch_size
 
             loss += sentRNN_loss * lambda_sent
@@ -488,7 +482,7 @@ class Dense2pModel(ModelDesc):
 
                 # At each timestep the hidden state of the last LSTM layer is used to predict a distribution over the words in the vocbulary
                 logit_words = tf.nn.xw_plus_b(word_output[:], self.embed_word_W, self.embed_word_b)
-                cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logits=logit_words, labels=onehot_labels)
+                cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logit_words, labels=onehot_labels)
                 cross_entropy = cross_entropy * captions_masks[:, i, j]
                 loss_wordRNN = tf.reduce_sum(cross_entropy) / self.batch_size
                 loss += loss_wordRNN * lambda_word
