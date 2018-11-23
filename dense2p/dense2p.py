@@ -196,8 +196,6 @@ class ResNetC4Model(DetectionModel):
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx14x14
                 tf.sigmoid(final_mask_logits, name='output/masks')
 
-            # Dense2pModel().create_architecture('TEST', rois, inputs)
-
 
 class ResNetFPNModel(DetectionModel):
 
@@ -319,8 +317,11 @@ class ResNetFPNModel(DetectionModel):
             total_cost = tf.add_n(all_losses, 'total_cost')
             add_moving_summary(total_cost, wd_cost)
 
-            final_cost = Dense2pModel().create_architecture('TRAIN', rois, inputs)
-            return final_cost
+            dense2p_loss = Dense2pModel()._hierarchicalRNN_layer(rois, inputs)
+            final_loss = tf.identity(dense2p_loss, name="dense2p_loss")
+
+            add_moving_summary(total_cost, final_loss)
+            return final_loss
 
         else:
             decoded_boxes = fastrcnn_head.decoded_output_boxes()
@@ -337,8 +338,6 @@ class ResNetFPNModel(DetectionModel):
                 indices = tf.stack([tf.range(tf.size(final_labels)), tf.to_int32(final_labels) - 1], axis=1)
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx28x28
                 tf.sigmoid(final_mask_logits, name='output/masks')
-
-            # Dense2pModel().create_architecture('TEST', rois, inputs)
 
 
 class Dense2pModel(ModelDesc):
@@ -465,7 +464,7 @@ class Dense2pModel(ModelDesc):
             # the begining input of word_LSTM is topic vector, and DON'T compute the loss
             topic = tf.nn.rnn_cell.LSTMStateTuple(sentence_topic_vec[:, 0:512], sentence_topic_vec[:, 512:])
             word_state = (topic, topic)
-            # tf.reset_default_graph()
+
             for j in range(0, self.N_max):
 
                 with tf.device('/cpu:0'):
