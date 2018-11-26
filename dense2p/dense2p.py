@@ -23,8 +23,11 @@ except ImportError:
     pass
 
 from tensorpack import *
+from tensorpack import (TowerTrainer, StagingInput,
+                        ModelDescBase)
 from tensorpack.tfutils.summary import add_moving_summary
 from tensorpack.tfutils import optimizer
+from tensorpack.tfutils.tower import TowerContext, TowerFuncWrapper
 from tensorpack.tfutils.common import get_tf_version_tuple
 from tensorpack.models import (
     Conv2D, FullyConnected, layer_register)
@@ -81,6 +84,48 @@ class DetectionModel(ModelDesc):
         if cfg.MODE_MASK:
             out.append('output/masks')
         return ['image'], out
+
+
+class Dense2pTrainer(TowerTrainer):
+
+    def __init__(self, model, input, num_gpu=1):
+        """
+        Args:
+            input (InputSource):
+            model (GANModelDesc):
+        """
+        super(Dense2pTrainer, self).__init__()
+
+        if num_gpu > 1:
+            input = StagingInput(input)
+
+        cbs = input.setup(model.get_inputs_desc())
+        self.register_callback(cbs)
+
+        if num_gpu <= 1:
+            self._build_gan_trainer(input, model)
+        else:
+            pass
+
+    def _build_gan_trainer(self, input, model):
+        # Build the graph
+        ctx = get_current_tower_context()
+        self.tower_func = TowerFuncWrapper(model.build_graph, model.get_inputs_desc())
+        with TowerContext('', is_training=True):
+            self.tower_func(*input.get_input_tensors())
+        opt = model.get_optimizer()
+
+        varlist = tf.trainable_variables()
+        encoder_vars = tf.contrib.framework.filter_variables(varlist, exclude_patterns=['decoder'])
+        decoder_vars = tf.contrib.framework.filter_variables(varlist, include_patterns=['decoder'])
+
+        # Define the training iteration
+        # by default, run one decoder_min after one detector_min
+        with tf.name_scope('optimize'):
+            detector_min = opt.minimize(model.detector_loss, var_list=encoder_vars, name='encoder_op')
+            with tf.control_dependencies([detector_min]):
+                decoder_min = opt.minimize(model.decoder_loss, var_list=decoder_vars, name='decoder_op')
+        self.train_op = decoder_min
 
 
 class ResNetC4Model(DetectionModel):
@@ -171,13 +216,18 @@ class ResNetC4Model(DetectionModel):
             all_losses.append(wd_cost)
 
             total_cost = tf.add_n(all_losses, 'total_cost')
-            # add_moving_summary(total_cost, wd_cost)
+            add_moving_summary(total_cost, wd_cost)
 
-            dense2p_loss = Dense2pModel()._hierarchicalRNN_layer(rois, inputs)
-            final_loss = tf.identity(dense2p_loss, name="dense2p_loss")
+            self.detector_loss = total_cost
 
-            add_moving_summary(total_cost, final_loss)
-            return final_loss
+            with tf.variable_scope('decoder'):
+                dense2p_loss = Dense2pModel()._hierarchicalRNN_layer(rois, inputs)
+
+            decoder_loss = tf.identity(dense2p_loss, name="decoder/dense2p_loss")
+            self.decoder_loss = decoder_loss
+
+            logger.info(decoder_loss)
+            add_moving_summary(decoder_loss)
 
         else:
 
@@ -317,11 +367,16 @@ class ResNetFPNModel(DetectionModel):
             total_cost = tf.add_n(all_losses, 'total_cost')
             add_moving_summary(total_cost, wd_cost)
 
-            dense2p_loss = Dense2pModel()._hierarchicalRNN_layer(rois, inputs)
-            final_loss = tf.identity(dense2p_loss, name="dense2p_loss")
+            self.detector_loss = total_cost
 
-            add_moving_summary(total_cost, final_loss)
-            return final_loss
+            with tf.variable_scope('decoder'):
+                dense2p_loss = Dense2pModel()._hierarchicalRNN_layer(rois, inputs)
+
+            decoder_loss = tf.identity(dense2p_loss, name="decoder/dense2p_loss")
+            self.decoder_loss = decoder_loss
+
+            logger.info(decoder_loss)
+            add_moving_summary(decoder_loss)
 
         else:
             decoded_boxes = fastrcnn_head.decoded_output_boxes()
@@ -340,14 +395,14 @@ class ResNetFPNModel(DetectionModel):
                 tf.sigmoid(final_mask_logits, name='output/masks')
 
 
-class Dense2pModel(ModelDesc):
-
+class Dense2pModel(object):
+    @auto_reuse_variable_scope
     def __init__(self):
 
         # FOR RegionPooling_HierarchicalRNN
         self.n_words = 9904
         self.batch_size = 1
-        self.num_boxes = 32  # 50
+        self.num_boxes = 16  # 50
         self.feats_dim = 2048  # 4096
         self.project_dim = 1024  # 1024
         self.S_max = 6  # 6
@@ -403,30 +458,32 @@ class Dense2pModel(ModelDesc):
         else:
             self.embed_word_b = tf.zeros([self.n_words])
 
+    @auto_reuse_variable_scope
     def _hierarchicalRNN_layer(self, region_featurs, inputs):
-        # region_featurs's shape is 50 x 4096
-        # tmp_feats: 50 x 4096
+
+        # region_featurs's shape is 1 x 16 x 2048
+        # tmp_feats: 16 x 2048
         # feats = tf.placeholder(tf.float32, [self.batch_size, self.num_boxes, self.feats_dim])
-        feats = region_featurs
+        tmp_feats = region_featurs
 
-        # project_vec_all: 50 x 4096 * 4096 x 1024 --> 50 x 1024 ; project_vec: 10 x 1024
+        # project_vec_all: 16 x 2048 * 2048 x 1024 --> 16 x 1024 ; project_vec: 1 x 1024
         with tf.name_scope('project_vec_all'):
-            project_vec_all = tf.matmul(feats, self.regionPooling_W) + self.regionPooling_b
+            project_vec_all = tf.matmul(tmp_feats, self.regionPooling_W) + self.regionPooling_b
+            # tf.nn.xw_plus_b(tmp_feats, self.regionPooling_W, self.regionPooling_b)
 
-        # project_vec_all.set_shape([None,1024])
         project_vec_alls = tf.expand_dims(project_vec_all, 0)  # tf.reshape(project_vec_all, [1, 16, 1024])
-        # project_vec_alls.set_shape([1,None,1024])
 
         with tf.name_scope('project_vec'):
             project_vec = tf.reduce_max(project_vec_alls, reduction_indices=1)
 
-        # receive the [continue:0, stop:1] lists  example: [0, 0, 0, 0, 1, 1], it means this paragraph has five sentences
+        # receive the [continue:0, stop:1] lists
+        # example: [0, 0, 0, 0, 1, 1], it means this paragraph has five sentences
         num_distribution = inputs['num_distribution']  # tf.placeholder(tf.int32, [self.batch_size, self.S_max])
         # receive the ground truth words, which has been changed to idx use word2idx function
         captions = inputs['captions']  # tf.placeholder(tf.int32, [self.batch_size, self.S_max, self.N_max+1])
         captions_masks = inputs['captions_masks']  # tf.placeholder(tf.float32, [self.batch_size, self.S_max, self.N_max+1])
 
-        sentence_state = self.sentence_LSTM.zero_state(batch_size=self.batch_size, dtype=tf.float32)
+        sentence_state = self.sentence_LSTM.zero_state(batch_size=1, dtype=tf.float32)
 
         probs = []
         loss = 0.0
@@ -441,7 +498,7 @@ class Dense2pModel(ModelDesc):
         # ----------------------------------------------------------------------------------------------
         for i in range(0, self.S_max):
 
-            with tf.variable_scope('sentence_LSTM', reuse=tf.AUTO_REUSE):
+            with tf.variable_scope('sentence_LSTM'):
                 sentence_output, sentence_state = self.sentence_LSTM(project_vec, sentence_state)
 
             with tf.name_scope('fc1'):
@@ -456,7 +513,7 @@ class Dense2pModel(ModelDesc):
             sentRNN_label = tf.transpose(sentRNN_label)
 
             sentRNN_loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=sentRNN_label, logits=sentRNN_logistic_mu)
-            sentRNN_loss = tf.reduce_sum(sentRNN_loss)/self.batch_size
+            sentRNN_loss = tf.reduce_sum(sentRNN_loss)
 
             loss += sentRNN_loss * lambda_sent
             loss_sent += sentRNN_loss
@@ -470,24 +527,26 @@ class Dense2pModel(ModelDesc):
                 with tf.device('/cpu:0'):
                     current_embed = tf.nn.embedding_lookup(self.Wemb, captions[:, i, j])
 
-                with tf.variable_scope('word_LSTM', reuse=tf.AUTO_REUSE):
+                with tf.variable_scope('word_LSTM'):
                     word_output, word_state = self.word_LSTM(current_embed, word_state)
 
                 labels = tf.reshape(captions[:, i, j+1], [-1, 1])
-                indices = tf.reshape(tf.range(0, self.batch_size, 1), [-1, 1])
+                indices = tf.reshape(tf.range(0, 1, 1), [-1, 1])
 
-                concated = tf.concat([indices, labels], 1)
-                onehot_labels = tf.sparse_to_dense(concated, tf.stack([self.batch_size, self.n_words]), 1.0, 0.0)
+                concated = tf.concat([indices, labels], 1, name='c_label')
+
+                onehot_labels = tf.sparse_to_dense(concated, tf.stack([1, self.n_words]), 1.0, 0.0, name='onehot_labels')
 
                 # At each timestep the hidden state of the last LSTM layer is used to predict a distribution over the words in the vocbulary
                 logit_words = tf.nn.xw_plus_b(word_output[:], self.embed_word_W, self.embed_word_b)
                 cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logit_words, labels=onehot_labels)
                 cross_entropy = cross_entropy * captions_masks[:, i, j]
-                loss_wordRNN = tf.reduce_sum(cross_entropy) / self.batch_size
+                loss_wordRNN = tf.reduce_sum(cross_entropy)
                 loss += loss_wordRNN * lambda_word
                 loss_word += loss_wordRNN
 
-        return feats, num_distribution, captions, captions_masks, loss, loss_sent, loss_word
+        # return region_featurs, num_distribution, captions, captions_masks, final_loss, loss_sent, loss_word
+        return loss
 
     def _hierarchicalRNN_generate_layer(self, region_featurs):
         # feats: 1 x 50 x 4096
@@ -568,16 +627,21 @@ class Dense2pModel(ModelDesc):
         # 2. Then, build sentence LSTM, word LSTM
 
         if mode == 'TRAIN':
-            tf_feats, tf_num_distribution, tf_captions_matrix, tf_captions_masks, tf_loss, tf_loss_sent, tf_loss_word = self._hierarchicalRNN_layer(region_featurs, inputs)
+            pass
+            # tf_feats, tf_num_distribution, tf_captions_matrix, tf_captions_masks, tf_loss, tf_loss_sent, tf_loss_word = self._hierarchicalRNN_layer(region_featurs, inputs)
 
-            return tf_loss
+            # return tf_loss
 
         elif mode == 'TEST':
-            tf_feats, tf_generated_paragraph, tf_pred_re, tf_sentence_topic_vectors = self._hierarchicalRNN_generate_layer(region_featurs)
+            pass
+            # tf_feats, tf_generated_paragraph, tf_pred_re, tf_sentence_topic_vectors = self._hierarchicalRNN_generate_layer(region_featurs)
+
+    def logdata(datadict):
+        pass
 
     def train_net(args):
 
-        MODEL = ResNetFPNModel() if cfg.MODE_FPN else ResNetC4Model()
+        MODEL = ResNetC4Model()
 
         if args.visualize or args.evaluate or args.predict:
             pass
@@ -613,15 +677,21 @@ class Dense2pModel(ModelDesc):
 
             callbacks = [
                 PeriodicCallback(
-                    ModelSaver(max_to_keep=10, keep_checkpoint_every_n_hours=1),
-                    every_k_epochs=20),
+                    ModelSaver(max_to_keep=10, keep_checkpoint_every_n_hours=0.5),
+                    every_k_epochs=100),
+                # HookToCallback(tf_debug.LocalCLIDebugHook()),
                 ScheduledHyperParamSetter(
                     'learning_rate', warmup_schedule, interp='linear', step_based=True),
                 ScheduledHyperParamSetter('learning_rate', lr_schedule),
                 # EvalCallback(*MODEL.get_inference_tensor_names()),
+                ProcessTensors(['gap/output:0',
+                                'decoder/ExpandDims:0',
+                                'decoder/project_vec/Max:0',
+                                'decoder/c_label:0',
+                                'decoder/dense2p_loss:0', ], lambda c1, c2, c3, c4, c5: print(c1.shape, c2.shape, c3.shape, c4, c5)),
                 PeakMemoryTracker(),
-                EstimatedTimeLeft(median=True),
-                SessionRunTimeout(60000).set_chief_only(True),   # 1 minute timeout
+                # EstimatedTimeLeft(median=True),
+                SessionRunTimeout(180000).set_chief_only(True),   # 1 minute timeout
             ]
             if not is_horovod:
                 callbacks.append(GPUUtilizationTracker())
@@ -633,17 +703,18 @@ class Dense2pModel(ModelDesc):
                 else:
                     session_init = get_model_loader(cfg.BACKBONE.WEIGHTS) if cfg.BACKBONE.WEIGHTS else None
 
-            traincfg = TrainConfig(
-                model=MODEL,
-                data=QueueInput(train_dataflow),
+            Dense2pTrainer(
+                MODEL,
+                QueueInput(train_dataflow),
+                cfg.TRAIN.NUM_GPUS).train_with_defaults(
                 callbacks=callbacks,
                 steps_per_epoch=stepnum,
                 max_epoch=cfg.TRAIN.LR_SCHEDULE[-1] * factor // stepnum,
                 session_init=session_init,
             )
-            if is_horovod:
-                trainer = HorovodTrainer(average=False)
-            else:
-                # nccl mode has better speed than cpu mode
-                trainer = SyncMultiGPUTrainerReplicated(cfg.TRAIN.NUM_GPUS, average=False, mode='nccl')
-            launch_train_with_config(traincfg, trainer)
+            # if is_horovod:
+            #     trainer = HorovodTrainer(average=False)
+            # else:
+            #     # nccl mode has better speed than cpu mode
+            #     trainer = SyncMultiGPUTrainerReplicated(cfg.TRAIN.NUM_GPUS, average=False, mode='nccl')
+            # launch_train_with_config(traincfg, trainer)
