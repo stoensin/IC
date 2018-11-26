@@ -89,11 +89,7 @@ class DetectionModel(ModelDesc):
 class Dense2pTrainer(TowerTrainer):
 
     def __init__(self, model, input, num_gpu=1):
-        """
-        Args:
-            input (InputSource):
-            model (GANModelDesc):
-        """
+
         super(Dense2pTrainer, self).__init__()
 
         if num_gpu > 1:
@@ -226,7 +222,6 @@ class ResNetC4Model(DetectionModel):
             decoder_loss = tf.identity(dense2p_loss, name="decoder/dense2p_loss")
             self.decoder_loss = decoder_loss
 
-            logger.info(decoder_loss)
             add_moving_summary(decoder_loss)
 
         else:
@@ -375,7 +370,6 @@ class ResNetFPNModel(DetectionModel):
             decoder_loss = tf.identity(dense2p_loss, name="decoder/dense2p_loss")
             self.decoder_loss = decoder_loss
 
-            logger.info(decoder_loss)
             add_moving_summary(decoder_loss)
 
         else:
@@ -396,13 +390,14 @@ class ResNetFPNModel(DetectionModel):
 
 
 class Dense2pModel(object):
+
     @auto_reuse_variable_scope
     def __init__(self):
 
         # FOR RegionPooling_HierarchicalRNN
         self.n_words = 9904
         self.batch_size = 1
-        self.num_boxes = 16  # 50
+        self.num_boxes = 16  # from feature N x 2048
         self.feats_dim = 2048  # 4096
         self.project_dim = 1024  # 1024
         self.S_max = 6  # 6
@@ -684,11 +679,11 @@ class Dense2pModel(object):
                     'learning_rate', warmup_schedule, interp='linear', step_based=True),
                 ScheduledHyperParamSetter('learning_rate', lr_schedule),
                 # EvalCallback(*MODEL.get_inference_tensor_names()),
-                ProcessTensors(['gap/output:0',
-                                'decoder/ExpandDims:0',
-                                'decoder/project_vec/Max:0',
-                                'decoder/c_label:0',
-                                'decoder/dense2p_loss:0', ], lambda c1, c2, c3, c4, c5: print(c1.shape, c2.shape, c3.shape, c4, c5)),
+                # ProcessTensors(['gap/output:0',
+                #                 'decoder/ExpandDims:0',
+                #                 'decoder/project_vec/Max:0',
+                #                 'decoder/c_label:0',
+                #                 'decoder/dense2p_loss:0', ], lambda c1, c2, c3, c4, c5: print(c1.shape, c2.shape, c3.shape, c4, c5)),
                 PeakMemoryTracker(),
                 # EstimatedTimeLeft(median=True),
                 SessionRunTimeout(180000).set_chief_only(True),   # 1 minute timeout
