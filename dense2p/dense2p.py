@@ -80,7 +80,7 @@ class DetectionModel(ModelDesc):
             [str]: input names
             [str]: output names
         """
-        out = ['output/boxes', 'output/scores', 'output/labels']
+        out = ['output/boxes', 'output/scores', 'output/labels', 'decoder/captions', 'decoder/paragraphs']
         if cfg.MODE_MASK:
             out.append('output/masks')
         return ['image'], out
@@ -241,6 +241,8 @@ class ResNetC4Model(DetectionModel):
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx14x14
                 tf.sigmoid(final_mask_logits, name='output/masks')
 
+                feats, generated_paragraph, pred_re, generated_sent = Dense2pModel()._hierarchicalRNN_generate_layer(rois, inputs)
+
 
 class ResNetFPNModel(DetectionModel):
 
@@ -387,6 +389,8 @@ class ResNetFPNModel(DetectionModel):
                 indices = tf.stack([tf.range(tf.size(final_labels)), tf.to_int32(final_labels) - 1], axis=1)
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx28x28
                 tf.sigmoid(final_mask_logits, name='output/masks')
+
+            feats, generated_paragraph, pred_re, generated_sent = Dense2pModel()._hierarchicalRNN_generate_layer(rois, inputs)
 
 
 class Dense2pModel(object):
@@ -544,15 +548,11 @@ class Dense2pModel(object):
         return loss
 
     def _hierarchicalRNN_generate_layer(self, region_featurs):
-        # feats: 1 x 50 x 4096
-        # feats = tf.placeholder(tf.float32, [1, self.num_boxes, self.feats_dim])
         feats = region_featurs
-        # tmp_feats: 50 x 4096
-        tmp_feats = tf.reshape(feats, [-1, self.feats_dim])
 
         # project_vec_all: 50 x 4096 * 4096 x 1024 + 1024 --> 50 x 1024
-        project_vec_all = tf.matmul(tmp_feats, self.regionPooling_W) + self.regionPooling_b
-        project_vec_all = tf.reshape(project_vec_all, [1, 50, self.project_dim])
+        project_vec_all = tf.matmul(feats, self.regionPooling_W) + self.regionPooling_b
+        project_vec_all = tf.reshape(project_vec_all, [1, self.num_boxes, self.project_dim])
         project_vec = tf.reduce_max(project_vec_all, reduction_indices=1)
 
         # initialize the sentence_LSTM state
@@ -617,29 +617,37 @@ class Dense2pModel(object):
 
         return feats, generated_paragraph, pred_re, generated_sent
 
-    def create_architecture(self, mode, region_featurs, inputs):
-        # 1. Pooling the visual features into a single dense feature
-        # 2. Then, build sentence LSTM, word LSTM
-
-        if mode == 'TRAIN':
-            pass
-            # tf_feats, tf_num_distribution, tf_captions_matrix, tf_captions_masks, tf_loss, tf_loss_sent, tf_loss_word = self._hierarchicalRNN_layer(region_featurs, inputs)
-
-            # return tf_loss
-
-        elif mode == 'TEST':
-            pass
-            # tf_feats, tf_generated_paragraph, tf_pred_re, tf_sentence_topic_vectors = self._hierarchicalRNN_generate_layer(region_featurs)
-
-    def logdata(datadict):
-        pass
+    def predict(pred_func, input_file):
+        img = cv2.imread(input_file, cv2.IMREAD_COLOR)
+        results = detect_one_image(img, pred_func)
+        final = draw_final_outputs(img, results)
+        viz = np.concatenate((img, final), axis=1)
+        tpviz.interactive_imshow(viz)
 
     def train_net(args):
 
         MODEL = ResNetC4Model()
 
         if args.visualize or args.evaluate or args.predict:
-            pass
+            assert args.load
+            finalize_configs(is_training=False)
+
+            if args.predict or args.visualize:
+                cfg.TEST.RESULT_SCORE_THRESH = cfg.TEST.RESULT_SCORE_THRESH_VIS
+
+            if args.visualize:
+                pass
+            else:
+                pred = OfflinePredictor(PredictConfig(
+                    model=MODEL,
+                    session_init=get_model_loader(args.load),
+                    input_names=MODEL.get_inference_tensor_names()[0],
+                    output_names=MODEL.get_inference_tensor_names()[4]))
+                if args.evaluate:
+                    pass
+                elif args.predict:
+                    # COCODetection(cfg.DATA.BASEDIR, 'val2014')   # Only to load the class names into caches
+                    Dense2pModel.predict(pred, args.predict)
         else:
             is_horovod = cfg.TRAINER == 'horovod'
             if is_horovod:
