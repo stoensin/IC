@@ -18,13 +18,13 @@ def draw_annotation(img, boxes, klass, is_crowd=None):
     if is_crowd is not None:
         assert len(boxes) == len(is_crowd)
         for cls, crd in zip(klass, is_crowd):
-            clsname = cfg.DATA.CLASS_NAMES[cls]
+            clsname = cls
             if crd == 1:
                 clsname += ';Crowd'
             labels.append(clsname)
     else:
         for cls in klass:
-            labels.append(cfg.DATA.CLASS_NAMES[cls])
+            labels.append(cls)
     img = viz.draw_boxes(img, boxes, labels)
     return img
 
@@ -58,7 +58,7 @@ def draw_predictions(img, boxes, scores):
         return img
     labels = scores.argmax(axis=1)
     scores = scores.max(axis=1)
-    tags = ["{},{:.2f}".format(cfg.DATA.CLASS_NAMES[lb], score) for lb, score in zip(labels, scores)]
+    tags = ["{},{:.2f}".format(lb, score) for lb, score in zip(labels, scores)]
     return viz.draw_boxes(img, boxes, tags)
 
 
@@ -73,7 +73,7 @@ def draw_final_outputs(img, results):
     tags = []
     for r in results:
         tags.append(
-            "{},{:.2f}".format(cfg.DATA.CLASS_NAMES[r.class_id], r.score))
+            "{},{:.2f}".format(r.class_id, r.score))
     boxes = np.asarray([r.box for r in results])
     ret = viz.draw_boxes(img, boxes, tags)
 

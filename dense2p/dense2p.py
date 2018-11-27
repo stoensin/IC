@@ -49,6 +49,11 @@ from region_detector.model_fpn import (
 from region_detector.model_cascade import CascadeRCNNHead
 from region_detector.model_box import (
     clip_boxes, crop_and_resize, roi_align, RPNAnchors)
+from region_detector.viz import (
+    draw_annotation, draw_proposal_recall,
+    draw_predictions, draw_final_outputs)
+from region_detector.eval import (
+    eval_coco, detect_one_image, print_evaluation_scores, DetectionResult)
 from visual_genome.dataset import (
     get_train_dataflow, get_eval_dataflow,
     get_all_anchors, get_all_anchors_fpn)
@@ -241,7 +246,7 @@ class ResNetC4Model(DetectionModel):
                 final_mask_logits = tf.gather_nd(mask_logits, indices)   # #resultx14x14
                 tf.sigmoid(final_mask_logits, name='output/masks')
 
-                feats, generated_paragraph, pred_re, generated_sent = Dense2pModel()._hierarchicalRNN_generate_layer(rois, inputs)
+            feats, generated_paragraph, pred_re, generated_sent = Dense2pModel()._hierarchicalRNN_generate_layer(rois, inputs)
 
 
 class ResNetFPNModel(DetectionModel):
@@ -618,11 +623,48 @@ class Dense2pModel(object):
         return feats, generated_paragraph, pred_re, generated_sent
 
     def predict(pred_func, input_file):
+        each_paragraph = []
+        current_paragraph = ""
+        T_stop = 0.5
+
         img = cv2.imread(input_file, cv2.IMREAD_COLOR)
-        results = detect_one_image(img, pred_func)
+        results, pred, generated_paragraph_indexes = detect_one_image(img, pred_func)
+
+        idx2word = pd.Series(np.load('visual_genome/idx2word.npy').tolist())
+
+        for sent_index in generated_paragraph_indexes:
+            each_sent = []
+            for word_index in sent_index:
+                each_sent.append(idx2word[word_index])
+            each_paragraph.append(each_sent)
+
+        for idx, each_sent in enumerate(each_paragraph):
+            # if the current sentence is the end sentence of the paragraph
+            # According to the probability distribution:
+            # CONTINUE: [1, 0]
+            # STOP    : [0, 1]
+            # So, if the first item of pred is less than the T_stop
+            # the generation process is break
+            if pred[idx][0][0] <= T_stop:
+                break
+            current_sent = ''
+            for each_word in each_sent:
+                current_sent += each_word + ' '
+            current_sent = current_sent.replace('<eos> ', '')
+            current_sent = current_sent.replace('<pad> ', '')
+            current_sent = current_sent + '.'
+            current_sent = current_sent.replace(' .', '.')
+            current_sent = current_sent.replace(' ,', ',')
+            current_paragraph += current_sent
+            if idx != len(each_paragraph) - 1:
+                current_paragraph += ' '
+
         final = draw_final_outputs(img, results)
         viz = np.concatenate((img, final), axis=1)
-        tpviz.interactive_imshow(viz)
+        cv2.imwrite("output.png", viz)
+        logger.info("Inference output written to output.png")
+        logger.info(current_paragraph)
+        # tpviz.interactive_imshow(viz)
 
     def train_net(args):
 
@@ -642,7 +684,7 @@ class Dense2pModel(object):
                     model=MODEL,
                     session_init=get_model_loader(args.load),
                     input_names=MODEL.get_inference_tensor_names()[0],
-                    output_names=MODEL.get_inference_tensor_names()[4]))
+                    output_names=MODEL.get_inference_tensor_names()[1]))
                 if args.evaluate:
                     pass
                 elif args.predict:
