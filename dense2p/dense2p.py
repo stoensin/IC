@@ -553,12 +553,13 @@ class Dense2pModel(object):
         return loss
 
     def _hierarchicalRNN_generate_layer(self, region_featurs):
+        # feats: 1 x 16 x 4096
         feats = region_featurs
 
-        # project_vec_all: 50 x 4096 * 4096 x 1024 + 1024 --> 50 x 1024
+        # project_vec_all: 16 x 4096 * 4096 x 1024 + 1024 --> 16 x 1024
         project_vec_all = tf.matmul(feats, self.regionPooling_W) + self.regionPooling_b
-        project_vec_all = tf.reshape(project_vec_all, [1, self.num_boxes, self.project_dim])
-        project_vec = tf.reduce_max(project_vec_all, reduction_indices=1)
+        project_vec_alls = tf.expand_dims(project_vec_all, 0)
+        project_vec = tf.reduce_max(project_vec_alls, reduction_indices=1)
 
         # initialize the sentence_LSTM state
         sentence_state = self.sentence_LSTM.zero_state(batch_size=1, dtype=tf.float32)
