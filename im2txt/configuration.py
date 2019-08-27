@@ -79,10 +79,6 @@ class ModelConfig(object):
 
 
 class TrainingConfig(object):
-<<<<<<< HEAD
-  """ training config hyperparameters."""
-=======
->>>>>>> cb7b00e95da9128a21c6a0e6126d8ba4f07a554a
 
   def __init__(self):
     """Sets the default training hyperparameters."""
