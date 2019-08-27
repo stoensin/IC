@@ -1,4 +1,4 @@
-### FOLDER: app
+### FOLDER: app/
 
 
 > app.py provide service for user of the image captioning
