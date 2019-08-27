@@ -79,7 +79,7 @@ class ModelConfig(object):
 
 
 class TrainingConfig(object):
-  """Wrapper class for training hyperparameters."""
+  """ training config hyperparameters."""
 
   def __init__(self):
     """Sets the default training hyperparameters."""
